@@ -1,4 +1,6 @@
-# Stock Options Prediction Lab
+# stonk
+
+Stock Options Prediction Lab
 
 A local research tool for estimating short-term stock direction, expected move, and options-relevant setup quality.
 
@@ -107,4 +109,3 @@ The software does not place trades. Add broker integration only after paper trad
 3. Add options-chain ingestion: bid/ask, IV, delta, open interest, skew.
 4. Add event calendars: earnings dates, FOMC, CPI, product launches.
 5. Add portfolio risk: max loss, beta exposure, sector concentration, event overlap.
-
