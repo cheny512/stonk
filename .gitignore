@@ -4,4 +4,15 @@ __pycache__/
 *.csv
 node_modules/
 dist/
+.env
+.venv/
+venv/
+data/*
+!data/.gitkeep
+!data/options/
+!data/options/.gitkeep
+!data/equity/
+!data/equity/.gitkeep
+!data/equity/custom/
+!data/equity/custom/.gitkeep
 !.gitkeep

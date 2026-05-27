@@ -164,68 +164,6 @@ export function parseCsv(text) {
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
 }
 
-export function generateDemoRows(length = 520) {
-  const rows = [];
-  let price = 108;
-  let seed = 21;
-  const rand = () => {
-    seed = (seed * 1664525 + 1013904223) % 4294967296;
-    return seed / 4294967296;
-  };
-  for (let i = 0; i < length; i += 1) {
-    const drift = 0.00055 + Math.sin(i / 35) * 0.0018 + (i > 260 ? 0.00018 : 0);
-    const shock = (rand() - 0.5) * 0.028;
-    const open = price * (1 + (rand() - 0.5) * 0.01);
-    price = Math.max(8, price * (1 + drift + shock));
-    const high = Math.max(open, price) * (1 + rand() * 0.015);
-    const low = Math.min(open, price) * (1 - rand() * 0.015);
-    rows.push({
-      date: new Date(2024, 0, i + 1).toISOString().slice(0, 10),
-      open,
-      high,
-      low,
-      close: price,
-      volume: Math.round(900000 + rand() * 700000 + Math.sin(i / 11) * 180000),
-      earnings: i % 63 === 0 ? (rand() - 0.45) * 0.3 : 0,
-      dividend: 0,
-      cpi: 0,
-      rate: 0,
-    });
-  }
-  return rows;
-}
-
-export function generateLongHistoryRows() {
-  const rows = [];
-  let price = 4.4;
-  let seed = 1871;
-  const rand = () => {
-    seed = (seed * 1103515245 + 12345) % 2147483648;
-    return seed / 2147483648;
-  };
-  for (let year = 1871; year <= 2026; year += 1) {
-    for (let month = 0; month < 12; month += 1) {
-      const regime = year < 1914 ? 0.003 : year < 1946 ? 0.001 : year < 1982 ? 0.004 : 0.006;
-      const cycle = Math.sin((year - 1871) / 7) * 0.012;
-      const shock = (rand() - 0.5) * (year < 1925 ? 0.06 : 0.045);
-      price = Math.max(1, price * (1 + regime + cycle + shock));
-      rows.push({
-        date: `${year}-${String(month + 1).padStart(2, "0")}-01`,
-        open: price,
-        high: price,
-        low: price,
-        close: price,
-        volume: 0,
-        earnings: 0,
-        dividend: 0,
-        cpi: 0,
-        rate: 0,
-      });
-    }
-  }
-  return rows;
-}
-
 function ema(values, period) {
   if (!values.length) return 0;
   const alpha = 2 / (period + 1);

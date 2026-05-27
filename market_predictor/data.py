@@ -3,7 +3,11 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Literal
+
+from .data_providers.router import fetch_equity_bars as _fetch_equity_bars
+from .data_providers.router import fetch_options_chain as _fetch_options_chain
+from .data_providers.types import EquityBar, OptionsChain
 
 
 @dataclass(frozen=True)
@@ -107,4 +111,43 @@ def attach_events(rows: Iterable[PriceRow], events: dict[str, dict[str, float]])
             )
         )
     return merged
+
+
+def equity_bars_to_price_rows(bars: Iterable[EquityBar]) -> list[PriceRow]:
+    return [
+        PriceRow(
+            date=bar.date,
+            open=bar.open,
+            high=bar.high,
+            low=bar.low,
+            close=bar.close,
+            volume=bar.volume,
+            extras={},
+        )
+        for bar in bars
+    ]
+
+
+def load_equity_from_provider(
+    ticker: str,
+    start: str,
+    end: str,
+    *,
+    mode: Literal["auto", "training", "live"] = "auto",
+) -> list[PriceRow]:
+    """Fetch OHLCV via Polygon (recent) or ThetaData (historical training)."""
+    bars = _fetch_equity_bars(ticker, start, end, mode=mode)
+    rows = equity_bars_to_price_rows(bars)
+    if len(rows) < 90:
+        raise ValueError("Need at least 90 daily rows for a useful model")
+    return rows
+
+
+def load_options_chain(
+    ticker: str,
+    as_of: str,
+    *,
+    mode: Literal["auto", "training", "live"] = "auto",
+) -> OptionsChain:
+    return _fetch_options_chain(ticker, as_of, mode=mode)
 

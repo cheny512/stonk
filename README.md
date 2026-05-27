@@ -35,7 +35,25 @@ This is **not** a trading oracle and it is not financial advice. The point is to
   - hit rate, expectancy, profit factor, max drawdown, and equity curve
   - options setup read based on stock signal versus implied move
 
-No external Python packages are required.
+The core CLI and feature engine run with the Python standard library only. For live/historical market data and the React API bridge, install optional dependencies:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+## Data Providers
+
+| Role | Provider | Use |
+|------|----------|-----|
+| Training / deep history | **ThetaData** | Options chains and equity EOD for old `as_of` dates |
+| Live / recent | **Massive.com** | Recent chains, snapshots, and equity aggregates |
+
+Routing is automatic: dates older than 7 days use ThetaData; recent dates use Massive. Override with `mode=training` or `mode=live` on API/CLI calls.
+
+Downloaded files are cached under `data/` (gitignored) as parquet or csv.
 
 ## Top 20 Indicators
 
@@ -121,21 +139,63 @@ Use scores from `-1.0` to `1.0` when the input is qualitative. Example: a major 
 
 ## Run
 
-Open the React UI:
+### One command: API + React UI
 
 ```bash
-cd ui
-npm install
-npm run dev
+source .venv/bin/activate
+pip install -r requirements.txt
+cd ui && npm install && npm run dev
 ```
 
-Then visit:
+This starts the Python API on port **8000** and Vite on **5173**. All training and backtests run on the server when you click buttons in the UI.
 
-```text
-http://127.0.0.1:5173
+### Download S&P 500 history (10 years, daily CSV)
+
+From the UI: **Download S&P 500 (10y)** (or CLI):
+
+```bash
+python3 scripts/download_sp500.py
 ```
 
-The UI can run on demo data or an uploaded daily OHLCV CSV.
+CSVs are stored under `data/equity/sp500/` (gitignored). Tickers are sourced from the public S&P 500 constituents list and pulled via Yahoo Finance (`yfinance`).
+
+### Workflow
+
+1. **Download S&P 500 (10y)** — fetches real OHLCV CSVs (~500 tickers; first run can take 30+ minutes).
+2. Select tickers in the universe list.
+3. **Auto-train weights** — jointly learns all 20 indicator weights via logistic regression on a chronological train/validation split (optional coordinate refinement on validation hit rate).
+4. **Run portfolio backtest** — walk-forward metrics across selected stocks.
+5. **Live stock + options scan** — applies trained weights to the latest bar on each selected ticker and ranks option calls/puts from the live chain (Massive if configured).
+6. **Stock Test** tab — test any individual ticker:
+   - **Historical test** — slide to a past date and score vs actual forward return
+   - **Latest (live)** — refresh from API and score the most recent bar (forward outcome pending)
+   - Type any symbol (AAPL, TSLA, SPY, etc.) and click **Load / refresh**
+
+### Live data providers
+
+| Provider | Key required | Best for |
+|----------|--------------|----------|
+| **Massive.com** (formerly Polygon) | `MASSIVE_API_KEY` | US stocks + options; live quotes and chains ([docs](https://massive.com/docs/rest/stocks/overview)) |
+| **yfinance** | None | Any ticker, daily bars; free, delayed (~15 min) |
+| **ThetaData** | username/password | Deep historical **options** for training |
+
+With no Massive key, the app uses **yfinance** automatically for load/refresh and quotes.
+
+```bash
+cp .env.example .env   # add MASSIVE_API_KEY=your_key
+python3 scripts/test_massive.py
+```
+
+No demo or synthetic price series are generated in the app.
+
+### Production static UI
+
+```bash
+cd ui && npm run build
+python3 scripts/serve_ui.py
+```
+
+Serves `ui/dist` at `http://127.0.0.1:8765`.
 
 CLI backtest:
 
@@ -194,7 +254,7 @@ The software does not place trades. Add broker integration only after paper trad
 
 ## Recommended Next Improvements
 
-1. Add a real data feed: Polygon, Tiingo, Alpha Vantage, Tradier, Interactive Brokers, or yfinance.
+1. Wire the Research UI to `fetchEquityBars` / `fetchOptionsChain` in `ui/src/api/client.js`.
 2. Store daily model snapshots so you can audit prediction drift.
 3. Add options-chain ingestion: bid/ask, IV, delta, open interest, skew.
 4. Add event calendars: earnings dates, FOMC, CPI, product launches.

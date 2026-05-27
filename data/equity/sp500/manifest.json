@@ -1,0 +1,97 @@
+{
+  "tickers": {
+    "A": {
+      "end": "2026-05-26",
+      "error": null,
+      "path": "equity/sp500/A.csv",
+      "rows": 2532,
+      "start": "2016-04-29"
+    },
+    "AAPL": {
+      "end": "2026-05-26",
+      "error": null,
+      "path": "equity/sp500/AAPL.csv",
+      "rows": 2532,
+      "start": "2016-04-29"
+    },
+    "ABBV": {
+      "end": "2026-05-26",
+      "error": null,
+      "path": "equity/sp500/ABBV.csv",
+      "rows": 500,
+      "start": "2024-05-28"
+    },
+    "ABT": {
+      "end": "2026-05-26",
+      "error": null,
+      "path": "equity/sp500/ABT.csv",
+      "rows": 500,
+      "start": "2024-05-28"
+    },
+    "ACN": {
+      "end": "2026-05-26",
+      "error": null,
+      "path": "equity/sp500/ACN.csv",
+      "rows": 500,
+      "start": "2024-05-28"
+    },
+    "ADBE": {
+      "end": "2026-05-26",
+      "error": null,
+      "path": "equity/sp500/ADBE.csv",
+      "rows": 2532,
+      "start": "2016-04-29"
+    },
+    "AES": {
+      "end": "2026-05-26",
+      "error": null,
+      "path": "equity/sp500/AES.csv",
+      "rows": 2532,
+      "start": "2016-04-29"
+    },
+    "AFL": {
+      "end": "2026-05-26",
+      "error": null,
+      "path": "equity/sp500/AFL.csv",
+      "rows": 2532,
+      "start": "2016-04-29"
+    },
+    "AMD": {
+      "end": "2026-05-26",
+      "error": null,
+      "path": "equity/sp500/AMD.csv",
+      "rows": 2532,
+      "start": "2016-04-29"
+    },
+    "AOS": {
+      "end": "2026-05-26",
+      "error": null,
+      "path": "equity/sp500/AOS.csv",
+      "rows": 500,
+      "start": "2024-05-28"
+    },
+    "MMM": {
+      "end": "2026-05-26",
+      "error": null,
+      "path": "equity/sp500/MMM.csv",
+      "rows": 500,
+      "start": "2024-05-28"
+    },
+    "MSFT": {
+      "end": "2026-05-26",
+      "error": null,
+      "path": "equity/sp500/MSFT.csv",
+      "rows": 2532,
+      "start": "2016-04-29"
+    },
+    "NVDA": {
+      "end": "2026-05-26",
+      "error": null,
+      "path": "equity/sp500/NVDA.csv",
+      "rows": 2532,
+      "start": "2016-04-29"
+    }
+  },
+  "updated": "2026-05-27",
+  "years": 10
+}

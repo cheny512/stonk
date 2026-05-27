@@ -770,3 +770,65 @@ button.primary:hover {
     grid-template-columns: 1fr;
   }
 }
+
+.dataset-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.dataset-actions button {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  cursor: pointer;
+}
+
+.dataset-row.disabled {
+  opacity: 0.55;
+}
+
+.compact-tabs button {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.stock-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+
+.stock-toolbar .control-group input[type="text"] {
+  width: 100%;
+  min-width: 120px;
+}
+
+.options-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.options-header,
+.options-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr 0.7fr 0.8fr;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.options-header {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.detail-panel.span-two {
+  grid-column: 1 / -1;
+}
