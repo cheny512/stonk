@@ -48,7 +48,24 @@ Use scores from `-1.0` to `1.0` when the input is qualitative. Example: a major 
 
 ## Run
 
-Backtest:
+Open the React UI:
+
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+Then visit:
+
+```text
+http://127.0.0.1:5173
+```
+
+The UI can run on demo data or an uploaded daily OHLCV CSV.
+
+CLI backtest:
+
 
 ```bash
 python3 -m market_predictor.cli backtest --prices path/to/AAPL.csv --ticker AAPL --horizon 5
