@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n api,ui -c blue,green \"python3 ../scripts/api_server.py\" \"vite --host 127.0.0.1 --port 5173\"",
+    "dev": "concurrently -k -n api,ui -c blue,green \"../.venv/bin/python3 ../scripts/api_server.py\" \"vite --host 127.0.0.1 --port 5173\"",
     "dev:ui": "vite --host 127.0.0.1 --port 5173",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173"
