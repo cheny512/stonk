@@ -24,23 +24,43 @@ export const indicatorCatalog = [
 export const platformTemplates = [
   {
     name: "TradingView Strategy Tester",
-    text: "Indicator toggles, signal threshold, trade log, drawdown, and expectancy.",
+    text: "Strategy scripts simulate trades on historical and realtime chart data; useful model shape: strategy inputs, tester metrics, forward testing.",
+    href: "https://www.tradingview.com/support/solutions/43000764138/",
   },
   {
     name: "VWAP / Anchored VWAP",
-    text: "Compares price against rolling volume-weighted value; neutral when volume is unavailable.",
+    text: "Pine exposes VWAP/VWMA style volume-weighted calculations; this app uses rolling VWAP distance and disables its effect when volume is missing.",
+    href: "https://www.tradingview.com/pine-script-reference/v6/",
   },
   {
-    name: "TradeZella / TraderSync journal",
-    text: "Tracks setup type, win rate, expectancy, profit factor, max drawdown, and mistake-proof risk notes.",
+    name: "TradeZella backtesting",
+    text: "Replay plus execution practice, journaling, position sizing, multi-symbol/multi-chart, analytics, and 11+ years of market data.",
+    href: "https://www.tradezella.com/backtesting",
+  },
+  {
+    name: "Tradesyncer journal / risk",
+    text: "Real-time journal and risk dashboard ideas: copy-trade tracking, win/loss breakdown, behavioral metrics, and account-level risk controls.",
+    href: "https://tradesyncer.com/trading-journal",
   },
   {
     name: "FX Replay",
-    text: "Replay-style scenario testing: change catalysts and immediately inspect how the historical signal would behave.",
+    text: "Replay mode, go-to dates/events, performance analytics, Monte Carlo, journal, and economic-calendar context for scenario testing.",
+    href: "https://fxreplay.com/features/backtest",
   },
   {
     name: "Alpha Futures style",
-    text: "Focuses on trend, volatility, volume impulse, and clean defined-risk execution.",
+    text: "Risk/evaluation framing: profit target, consistency rule, and max loss limit. Useful for adding model gates before sizing.",
+    href: "https://help.alpha-futures.com/en/articles/9491980-alpha-futures-evaluation-qualified-trader-overview",
+  },
+  {
+    name: "Shiller 1871 data",
+    text: "Monthly U.S. stock price, dividends, earnings, CPI, and rates starting January 1871 for broad-market regime research.",
+    href: "https://www.econ.yale.edu/~shiller/data.htm",
+  },
+  {
+    name: "CRSP historical data",
+    text: "Research-grade survivorship-aware U.S. security data with returns, volume, corporate actions, delistings, and identifiers from 1925 onward.",
+    href: "https://www.crsp.org/research/crsp-us-stock-databases/",
   },
 ];
 
@@ -378,6 +398,162 @@ export function runBacktest({ rows, horizon, confidence, settings, catalysts, tr
   };
 }
 
+export function correlation(xValues, yValues) {
+  const n = Math.min(xValues.length, yValues.length);
+  if (n < 3) return 0;
+  const x = xValues.slice(0, n);
+  const y = yValues.slice(0, n);
+  const xAvg = mean(x);
+  const yAvg = mean(y);
+  let covariance = 0;
+  let xVar = 0;
+  let yVar = 0;
+  for (let i = 0; i < n; i += 1) {
+    const xd = x[i] - xAvg;
+    const yd = y[i] - yAvg;
+    covariance += xd * yd;
+    xVar += xd * xd;
+    yVar += yd * yd;
+  }
+  const denom = Math.sqrt(xVar * yVar);
+  return denom ? covariance / denom : 0;
+}
+
+function collectSamples(datasets, horizon, catalysts, maxIndexByTicker = {}) {
+  const samples = Object.fromEntries(indicatorCatalog.map((indicator) => [indicator.key, { x: [], y: [] }]));
+  let totalRows = 0;
+  datasets.forEach((dataset) => {
+    const rows = dataset.rows || [];
+    const lastUsable = Math.min(rows.length - horizon, maxIndexByTicker[dataset.ticker] ?? rows.length - horizon);
+    for (let i = 70; i < lastUsable; i += 1) {
+      const features = featureAt(rows, i, catalysts);
+      const futureReturn = rows[i + horizon].close / rows[i].close - 1;
+      indicatorCatalog.forEach((indicator) => {
+        samples[indicator.key].x.push(features[indicator.key] || 0);
+        samples[indicator.key].y.push(futureReturn);
+      });
+      totalRows += 1;
+    }
+  });
+  return { samples, totalRows };
+}
+
+export function rankIndicators({ datasets, horizon, catalysts, maxIndexByTicker = {} }) {
+  const { samples, totalRows } = collectSamples(datasets, horizon, catalysts, maxIndexByTicker);
+  const rankings = indicatorCatalog.map((indicator) => {
+    const corr = correlation(samples[indicator.key].x, samples[indicator.key].y);
+    return {
+      ...indicator,
+      correlation: corr,
+      strength: Math.abs(corr),
+      sampleCount: samples[indicator.key].x.length,
+    };
+  });
+  rankings.sort((a, b) => b.strength - a.strength);
+  return { rankings, totalRows };
+}
+
+export function trainSettingsFromCorrelations({ datasets, horizon, catalysts, maxIndexByTicker = {} }) {
+  const { rankings, totalRows } = rankIndicators({ datasets, horizon, catalysts, maxIndexByTicker });
+  const strongest = Math.max(...rankings.map((row) => row.strength), 0.001);
+  const settings = Object.fromEntries(
+    indicatorCatalog.map((indicator) => {
+      const ranked = rankings.find((row) => row.key === indicator.key);
+      const scaled = ranked ? (ranked.correlation / strongest) * 1.5 : indicator.weight;
+      return [
+        indicator.key,
+        {
+          enabled: Boolean(ranked && ranked.sampleCount >= 50 && ranked.strength >= 0.01),
+          weight: clamp(scaled, -3, 3),
+        },
+      ];
+    }),
+  );
+  return { settings, rankings, totalRows };
+}
+
+export function runPortfolioBacktest({ datasets, horizon, confidence, settings, catalysts, tradeCost, trainFraction }) {
+  const results = datasets.map((dataset) => ({
+    ticker: dataset.ticker,
+    rows: dataset.rows.length,
+    coverage: coverageLabel(dataset.rows),
+    backtest: runBacktest({
+      rows: dataset.rows,
+      horizon,
+      confidence,
+      settings,
+      catalysts,
+      tradeCost,
+      trainFraction,
+    }),
+  }));
+  const totals = results.reduce(
+    (acc, item) => {
+      const bt = item.backtest;
+      acc.testCount += bt.testCount;
+      acc.signalCount += bt.signalCount;
+      acc.weightedAccuracy += bt.accuracy * bt.testCount;
+      acc.weightedHitRate += bt.hitRate * bt.signalCount;
+      acc.pnl += bt.cumulative;
+      acc.drawdown = Math.max(acc.drawdown, bt.maxDrawdown);
+      return acc;
+    },
+    { testCount: 0, signalCount: 0, weightedAccuracy: 0, weightedHitRate: 0, pnl: 0, drawdown: 0 },
+  );
+  return {
+    results,
+    testCount: totals.testCount,
+    signalCount: totals.signalCount,
+    accuracy: totals.testCount ? totals.weightedAccuracy / totals.testCount : 0,
+    hitRate: totals.signalCount ? totals.weightedHitRate / totals.signalCount : 0,
+    cumulative: totals.pnl,
+    expectancy: totals.signalCount ? totals.pnl / totals.signalCount : 0,
+    maxDrawdown: totals.drawdown,
+  };
+}
+
+export function pointInTimeTest({ rows, ticker, cutoffIndex, horizon, confidence, settings, catalysts, dte, iv, tradeCost, trainFraction }) {
+  const safeCutoff = clamp(Math.round(cutoffIndex), 90 + horizon, rows.length - horizon - 1);
+  const history = rows.slice(0, safeCutoff + 1);
+  const features = featureAt(rows, safeCutoff, catalysts);
+  const scored = score(features, settings);
+  const realizedReturn = rows[safeCutoff + horizon].close / rows[safeCutoff].close - 1;
+  const expectedAbsMove = Math.max(Math.abs((scored.probability - 0.5) * 2) * 0.06, mean(returns(history).slice(-40).map(Math.abs)) * Math.sqrt(horizon));
+  const predictedReturn = (scored.probability - 0.5) * 2 * expectedAbsMove;
+  const impliedMove = iv * Math.sqrt(dte / 365);
+  const movementEdge = expectedAbsMove - impliedMove;
+  const bias = scored.probability >= confidence ? "Bullish" : scored.probability <= 1 - confidence ? "Bearish" : "Neutral";
+  const directionCorrect = (bias === "Bullish" && realizedReturn > 0) || (bias === "Bearish" && realizedReturn < 0) || (bias === "Neutral" && Math.abs(realizedReturn) < expectedAbsMove);
+  const preCutoffBacktest = runBacktest({
+    rows: history,
+    horizon,
+    confidence,
+    settings,
+    catalysts,
+    tradeCost,
+    trainFraction,
+  });
+  return {
+    ticker,
+    date: rows[safeCutoff].date,
+    futureDate: rows[safeCutoff + horizon].date,
+    close: rows[safeCutoff].close,
+    futureClose: rows[safeCutoff + horizon].close,
+    probabilityUp: scored.probability,
+    rawScore: scored.raw,
+    predictedReturn,
+    expectedMove: expectedAbsMove,
+    realizedReturn,
+    impliedMove,
+    movementEdge,
+    bias,
+    directionCorrect,
+    features,
+    backtest: preCutoffBacktest,
+    coverage: coverageLabel(history),
+  };
+}
+
 export function analyze({ rows, ticker, horizon, confidence, dte, iv, catalysts, settings, tradeCost, trainFraction }) {
   const backtest = runBacktest({ rows, horizon, confidence, settings, catalysts, tradeCost, trainFraction });
   const latestFeatures = featureAt(rows, rows.length - 1, catalysts);
@@ -420,4 +596,3 @@ function coverageLabel(rows) {
   const hasVolume = rows.some((row) => row.volume > 0);
   return `${first} to ${last}${hasVolume ? "" : " · no volume/VWAP history"}`;
 }
-

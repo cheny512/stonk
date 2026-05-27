@@ -27,6 +27,10 @@ This is **not** a trading oracle and it is not financial advice. The point is to
   - top 20 stock movement indicators
   - enable/disable toggles and custom weights
   - catalyst overrides
+  - multi-stock research universe selection
+  - indicator correlation ranking across selected stocks
+  - continuously trained weights from historical samples
+  - point-in-time single-stock testing
   - walk-forward-style train/test split
   - hit rate, expectancy, profit factor, max drawdown, and equity curve
   - options setup read based on stock signal versus implied move
@@ -70,6 +74,30 @@ Important limits:
 - Survivorship-aware individual U.S. stock testing generally needs institutional datasets such as CRSP, which starts in 1925.
 - Listed equity options data is modern. Do not treat 1800s stock-index tests as options-chain tests.
 - VWAP and volume indicators become neutral when imported data has no volume field.
+
+## Workflow
+
+1. Use **Research** to choose multiple stock/index datasets.
+2. Let the app rank the 20 indicators by correlation to future returns.
+3. Keep continuous training on, or apply the trained weights and manually edit them.
+4. Use **Stock Test** to choose one stock and one historical date.
+5. Check predicted direction, predicted move, actual move, and the pre-date backtest.
+6. Only after repeated high out-of-sample accuracy should the model be used for real stock selection research.
+
+## External Tool Notes
+
+The Sources view links to current official information for:
+
+- TradingView Strategy Tester
+- TradingView Pine/VWAP reference
+- TradeZella backtesting
+- Tradesyncer journal/risk tools
+- FX Replay backtesting
+- Alpha Futures risk/evaluation concepts
+- Shiller 1871 market data
+- CRSP historical stock data
+
+These sites are not all direct data APIs. TradingView, TradeZella, FX Replay, and Tradesyncer are platforms/tools; Shiller and CRSP are the relevant historical data sources. For live stock testing, import licensed/exported OHLCV data or add a market-data API such as Polygon, Tiingo, Nasdaq Data Link, Interactive Brokers, or a broker feed.
 
 ## CSV Format
 

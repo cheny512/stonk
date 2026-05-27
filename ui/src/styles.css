@@ -26,7 +26,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -120,6 +121,23 @@ input {
   grid-template-columns: 1fr 1fr;
 }
 
+.view-tabs {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.view-tabs button {
+  justify-content: flex-start;
+  padding-inline: 12px;
+}
+
+.view-tabs button.selected {
+  border-color: #176f4b;
+  background: #e5f3ec;
+  color: #176f4b;
+}
+
 .control-group {
   display: grid;
   gap: 7px;
@@ -131,7 +149,8 @@ label {
   font-weight: 750;
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 40px;
   border: 1px solid var(--line);
@@ -231,6 +250,48 @@ button.primary:hover {
 
 .action-row.stacked {
   grid-template-columns: 1fr;
+}
+
+.dataset-list {
+  display: grid;
+  gap: 9px;
+  max-height: 245px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.dataset-row {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  align-items: start;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+
+.dataset-row input {
+  width: 16px;
+  min-height: 16px;
+  margin-top: 3px;
+  accent-color: var(--green);
+}
+
+.dataset-row span {
+  display: grid;
+  gap: 3px;
+}
+
+.dataset-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.auto-switch {
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  padding: 10px;
 }
 
 .stage-header {
@@ -529,6 +590,10 @@ button.primary:hover {
   border-bottom: 1px solid var(--line);
 }
 
+.indicator-row.ranked {
+  grid-template-columns: minmax(210px, 1fr) 86px 70px 82px;
+}
+
 .indicator-row input[type="number"] {
   min-height: 32px;
   padding: 5px 8px;
@@ -572,6 +637,7 @@ button.primary:hover {
   grid-template-columns: 1fr 1fr;
 }
 
+.note-list a,
 .note-list div {
   display: grid;
   gap: 4px;
@@ -579,6 +645,13 @@ button.primary:hover {
   border-radius: 6px;
   background: var(--panel-soft);
   padding: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.note-list a:hover {
+  border-color: #aac5b5;
+  background: #f2f7f1;
 }
 
 .note-list strong {
@@ -592,11 +665,65 @@ button.primary:hover {
   line-height: 1.45;
 }
 
+.dataset-results {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.dataset-results div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  padding: 12px;
+}
+
+.dataset-results span,
+.dataset-results small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.stock-toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 280px) minmax(280px, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+.date-readout {
+  display: grid;
+  gap: 3px;
+  min-width: 160px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  padding: 10px 12px;
+}
+
+.date-readout span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.compact-gauge {
+  height: 295px;
+}
+
 @media (max-width: 1100px) {
   .workspace,
   .chart-band,
   .detail-grid,
-  .detail-grid.wide {
+  .detail-grid.wide,
+  .stock-toolbar {
     grid-template-columns: 1fr;
   }
 
@@ -628,7 +755,8 @@ button.primary:hover {
     font-size: 26px;
   }
 
-  .indicator-row {
+  .indicator-row,
+  .indicator-row.ranked {
     grid-template-columns: 1fr;
     padding-bottom: 10px;
   }

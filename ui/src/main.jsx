@@ -4,13 +4,13 @@ import {
   Activity,
   BarChart3,
   Database,
+  FlaskConical,
   Play,
   RotateCcw,
   SlidersHorizontal,
   Upload,
 } from "lucide-react";
 import {
-  analyze,
   clamp,
   defaultCatalysts,
   defaultSettings,
@@ -21,6 +21,10 @@ import {
   parseCsv,
   pct,
   platformTemplates,
+  pointInTimeTest,
+  rankIndicators,
+  runPortfolioBacktest,
+  trainSettingsFromCorrelations,
 } from "./engine";
 import "./styles.css";
 
@@ -29,11 +33,23 @@ function fmt(value, digits = 2) {
   return value.toFixed(digits);
 }
 
+function makeDemoDatasets() {
+  const base = generateDemoRows(620);
+  const growth = base.map((row, index) => ({ ...row, close: row.close * (1 + index * 0.00035), high: row.high * (1 + index * 0.00035), low: row.low * (1 + index * 0.00035), open: row.open * (1 + index * 0.00035) }));
+  const choppy = base.map((row, index) => ({ ...row, close: row.close * (1 + Math.sin(index / 9) * 0.06), high: row.high * (1 + Math.sin(index / 9) * 0.06), low: row.low * (1 + Math.sin(index / 9) * 0.06), open: row.open * (1 + Math.sin(index / 9) * 0.06) }));
+  return [
+    { ticker: "DEMO", rows: base, selected: true, kind: "daily demo" },
+    { ticker: "DEMO-GROWTH", rows: growth, selected: true, kind: "daily demo" },
+    { ticker: "DEMO-CHOP", rows: choppy, selected: true, kind: "daily demo" },
+    { ticker: "US-MARKET-1871", rows: generateLongHistoryRows(), selected: false, kind: "monthly index" },
+  ];
+}
+
 function Sparkline({ rows }) {
   const width = 900;
-  const height = 320;
-  const pad = 34;
-  const data = rows.slice(-160);
+  const height = 280;
+  const pad = 32;
+  const data = rows.slice(-180);
   const closes = data.map((r) => r.close);
   const min = Math.min(...closes);
   const max = Math.max(...closes);
@@ -52,7 +68,7 @@ function Sparkline({ rows }) {
       })}
       <polyline points={points} fill="none" className="price-line" />
       <text x={pad} y={22} className="chart-label">{max.toFixed(2)}</text>
-      <text x={pad} y={height - 10} className="chart-label">{min.toFixed(2)}</text>
+      <text x={pad} y={height - 9} className="chart-label">{min.toFixed(2)}</text>
     </svg>
   );
 }
@@ -88,7 +104,7 @@ function SignalGauge({ probability }) {
   const angle = -90 + probability * 180;
   const color = probability >= 0.56 ? "var(--green)" : probability <= 0.44 ? "var(--red)" : "var(--gold)";
   return (
-    <div className="gauge-wrap" role="img" aria-label={`Signal gauge ${pct(probability)}`}>
+    <div className="gauge-wrap compact-gauge" role="img" aria-label={`Signal gauge ${pct(probability)}`}>
       <div className="gauge-arc" />
       <div className="gauge-fill" style={{ "--fill": `${probability * 100}%`, "--gauge-color": color }} />
       <div className="needle" style={{ transform: `rotate(${angle}deg)` }} />
@@ -108,23 +124,39 @@ function MetricCard({ accent, label, value, note }) {
   );
 }
 
-function IndicatorTable({ features, settings, onToggle, onWeight }) {
+function DatasetPicker({ datasets, onToggle }) {
+  return (
+    <div className="dataset-list">
+      {datasets.map((dataset) => (
+        <label className="dataset-row" key={dataset.ticker}>
+          <input type="checkbox" checked={dataset.selected} onChange={(event) => onToggle(dataset.ticker, event.target.checked)} />
+          <span>
+            <strong>{dataset.ticker}</strong>
+            <small>{dataset.rows.length} rows · {dataset.kind}</small>
+          </span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function RankingTable({ rankings, settings, onToggle, onWeight }) {
   return (
     <div className="indicator-table">
-      {indicatorCatalog.map((indicator) => {
+      {rankings.map((indicator, index) => {
         const setting = settings[indicator.key];
-        const contribution = (features[indicator.key] || 0) * (setting?.weight || 0);
         return (
-          <div className="indicator-row" key={indicator.key}>
+          <div className="indicator-row ranked" key={indicator.key}>
             <label className="switch-line">
               <input
                 type="checkbox"
                 checked={Boolean(setting?.enabled)}
                 onChange={(event) => onToggle(indicator.key, event.target.checked)}
               />
-              <span>{indicator.label}</span>
+              <span>{index + 1}. {indicator.label}</span>
             </label>
             <span className="group-tag">{indicator.group}</span>
+            <strong className={indicator.correlation >= 0 ? "positive" : "negative"}>{indicator.correlation >= 0 ? "+" : ""}{fmt(indicator.correlation, 3)}</strong>
             <input
               type="number"
               min="-3"
@@ -134,9 +166,6 @@ function IndicatorTable({ features, settings, onToggle, onWeight }) {
               onChange={(event) => onWeight(indicator.key, Number(event.target.value))}
               aria-label={`${indicator.label} weight`}
             />
-            <strong className={contribution >= 0 ? "positive" : "negative"}>
-              {contribution >= 0 ? "+" : ""}{fmt(contribution, 3)}
-            </strong>
           </div>
         );
       })}
@@ -144,38 +173,40 @@ function IndicatorTable({ features, settings, onToggle, onWeight }) {
   );
 }
 
-function FactorPressure({ features, settings }) {
-  const rows = indicatorCatalog
-    .filter((indicator) => settings[indicator.key]?.enabled)
-    .map((indicator) => ({
-      ...indicator,
-      value: (features[indicator.key] || 0) * settings[indicator.key].weight,
-    }))
-    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
-    .slice(0, 10);
+function SourcePanel() {
   return (
-    <div className="factor-list">
-      {rows.map((row) => {
-        const width = clamp(Math.abs(row.value) * 90, 4, 100);
-        return (
-          <div className="factor-row" key={row.key}>
-            <span>{row.label}</span>
-            <strong className={row.value >= 0 ? "positive" : "negative"}>
-              {row.value >= 0 ? "+" : ""}{row.value.toFixed(3)}
-            </strong>
-            <div className={`factor-meter ${row.value < 0 ? "negative" : ""}`}>
-              <div style={{ width: `${width}%` }} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
+    <section className="detail-grid">
+      <article className="detail-panel span-two">
+        <div className="panel-heading">
+          <h2>Live Source Map</h2>
+          <span>official pages checked today</span>
+        </div>
+        <div className="note-list columns">
+          {platformTemplates.map((item) => (
+            <a href={item.href} target="_blank" rel="noreferrer" key={item.name}>
+              <strong>{item.name}</strong>
+              <span>{item.text}</span>
+            </a>
+          ))}
+        </div>
+      </article>
+      <article className="detail-panel">
+        <div className="panel-heading">
+          <h2>Data Reality</h2>
+          <span>important</span>
+        </div>
+        <div className="note-list">
+          {historicalDataNotes.map((note) => <div key={note}><span>{note}</span></div>)}
+        </div>
+      </article>
+    </section>
   );
 }
 
 function App() {
-  const [rows, setRows] = React.useState(() => generateDemoRows());
-  const [ticker, setTicker] = React.useState("DEMO");
+  const [view, setView] = React.useState("research");
+  const [datasets, setDatasets] = React.useState(() => makeDemoDatasets());
+  const [activeTicker, setActiveTicker] = React.useState("DEMO");
   const [horizon, setHorizon] = React.useState(5);
   const [confidence, setConfidence] = React.useState(0.56);
   const [dte, setDte] = React.useState(21);
@@ -184,32 +215,73 @@ function App() {
   const [trainFraction, setTrainFraction] = React.useState(0.7);
   const [settings, setSettings] = React.useState(() => defaultSettings());
   const [catalysts, setCatalysts] = React.useState(() => defaultCatalysts());
-  const [status, setStatus] = React.useState("Demo data loaded");
+  const [autoTrain, setAutoTrain] = React.useState(true);
+  const [status, setStatus] = React.useState("Demo research universe loaded");
   const [inputError, setInputError] = React.useState("");
+  const activeDataset = datasets.find((dataset) => dataset.ticker === activeTicker) || datasets[0];
+  const [cutoffIndex, setCutoffIndex] = React.useState(360);
 
-  const analysis = React.useMemo(() => {
+  const selectedDatasets = React.useMemo(() => datasets.filter((dataset) => dataset.selected), [datasets]);
+
+  const trained = React.useMemo(() => {
     try {
+      return trainSettingsFromCorrelations({ datasets: selectedDatasets, horizon: clamp(Math.round(horizon), 1, 90), catalysts });
+    } catch (error) {
+      return { settings: defaultSettings(), rankings: indicatorCatalog.map((row) => ({ ...row, correlation: 0, strength: 0, sampleCount: 0 })), totalRows: 0, error: error.message };
+    }
+  }, [selectedDatasets, horizon, catalysts]);
+  const modelSettings = autoTrain ? trained.settings : settings;
+
+  const research = React.useMemo(() => {
+    try {
+      const portfolio = runPortfolioBacktest({
+        datasets: selectedDatasets,
+        horizon: clamp(Math.round(horizon), 1, 90),
+        confidence: clamp(confidence, 0.51, 0.9),
+        settings: modelSettings,
+        catalysts,
+        tradeCost: clamp(tradeCost / 100, 0, 0.2),
+        trainFraction: clamp(trainFraction, 0.5, 0.9),
+      });
+      const ranked = rankIndicators({ datasets: selectedDatasets, horizon: clamp(Math.round(horizon), 1, 90), catalysts });
+      return { portfolio, rankings: ranked.rankings, totalRows: ranked.totalRows, error: "" };
+    } catch (error) {
+      return { portfolio: null, rankings: [], totalRows: 0, error: error.message };
+    }
+  }, [selectedDatasets, horizon, confidence, modelSettings, catalysts, tradeCost, trainFraction]);
+
+  const maxCutoff = Math.max(95, (activeDataset?.rows.length || 120) - Math.round(horizon) - 1);
+  const safeCutoff = clamp(cutoffIndex, 95 + Math.round(horizon), maxCutoff);
+
+  const pointTest = React.useMemo(() => {
+    try {
+      if (!activeDataset) throw new Error("Choose or import a stock dataset first.");
       return {
-        result: analyze({
-          rows,
-          ticker: ticker || "TICKER",
+        result: pointInTimeTest({
+          rows: activeDataset.rows,
+          ticker: activeDataset.ticker,
+          cutoffIndex: safeCutoff,
           horizon: clamp(Math.round(horizon), 1, 90),
           confidence: clamp(confidence, 0.51, 0.9),
+          settings: modelSettings,
+          catalysts,
           dte: clamp(Math.round(dte), 1, 730),
           iv: clamp(iv / 100, 0.01, 3),
-          catalysts,
-          settings,
           tradeCost: clamp(tradeCost / 100, 0, 0.2),
           trainFraction: clamp(trainFraction, 0.5, 0.9),
         }),
         error: "",
       };
-    } catch (err) {
-      return { result: null, error: err.message };
+    } catch (error) {
+      return { result: null, error: error.message };
     }
-  }, [rows, ticker, horizon, confidence, dte, iv, catalysts, settings, tradeCost, trainFraction]);
-  const result = analysis.result;
-  const error = inputError || analysis.error;
+  }, [activeDataset, safeCutoff, horizon, confidence, modelSettings, catalysts, dte, iv, tradeCost, trainFraction]);
+
+  const error = inputError || research.error || pointTest.error || trained.error || "";
+
+  const toggleDataset = (ticker, selected) => {
+    setDatasets((current) => current.map((dataset) => dataset.ticker === ticker ? { ...dataset, selected } : dataset));
+  };
 
   const updateCatalyst = (key, value) => {
     setCatalysts((current) => ({ ...current, [key]: Number(value) }));
@@ -220,21 +292,37 @@ function App() {
       ...current,
       [key]: { ...current[key], weight: clamp(value, -3, 3) },
     }));
+    setAutoTrain(false);
   };
 
   const updateToggle = (key, enabled) => {
     setSettings((current) => ({ ...current, [key]: { ...current[key], enabled } }));
+    setAutoTrain(false);
   };
 
-  const loadFile = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const applyTraining = () => {
+    setSettings(trained.settings);
+    setAutoTrain(false);
+    setStatus(`Applied trained weights from ${trained.totalRows} historical samples`);
+  };
+
+  const loadFiles = async (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
     try {
-      const text = await file.text();
-      const parsed = parseCsv(text);
-      setRows(parsed);
-      setTicker(file.name.replace(/\.csv$/i, "").toUpperCase());
-      setStatus(`${parsed.length} rows loaded`);
+      const imported = [];
+      for (const file of files) {
+        const text = await file.text();
+        imported.push({
+          ticker: file.name.replace(/\\.csv$/i, "").toUpperCase(),
+          rows: parseCsv(text),
+          selected: true,
+          kind: "imported CSV",
+        });
+      }
+      setDatasets((current) => [...current, ...imported]);
+      setActiveTicker(imported[0].ticker);
+      setStatus(`${imported.length} dataset${imported.length === 1 ? "" : "s"} imported`);
       setInputError("");
     } catch (err) {
       setInputError(err.message);
@@ -242,19 +330,18 @@ function App() {
     }
   };
 
-  const loadDemo = () => {
-    setRows(generateDemoRows());
-    setTicker("DEMO");
-    setStatus("Demo data loaded");
+  const resetDemo = () => {
+    const demo = makeDemoDatasets();
+    setDatasets(demo);
+    setActiveTicker("DEMO");
+    setCutoffIndex(360);
+    setStatus("Demo research universe loaded");
     setInputError("");
   };
 
-  const loadLongHistory = () => {
-    setRows(generateLongHistoryRows());
-    setTicker("US-MARKET-1871");
-    setStatus("Synthetic Shiller-style long history loaded");
-    setInputError("");
-  };
+  const selectedCount = selectedDatasets.length;
+  const stockResult = pointTest.result;
+  const portfolio = research.portfolio;
 
   return (
     <main className="app-shell">
@@ -263,12 +350,19 @@ function App() {
           <div className="brand-block">
             <p className="eyebrow">stonk</p>
             <h1>Research Desk</h1>
-            <p className="subtle">20-indicator stock picker, catalyst tester, and options setup gate.</p>
+            <p className="subtle">Train indicators on many stocks, then test one stock at one point in time.</p>
           </div>
 
-          <label className="control-group">
-            Ticker / basket
-            <input value={ticker} onChange={(event) => setTicker(event.target.value)} autoComplete="off" />
+          <div className="view-tabs" role="tablist" aria-label="Model views">
+            <button type="button" className={view === "research" ? "selected" : ""} onClick={() => setView("research")}>Research</button>
+            <button type="button" className={view === "stock" ? "selected" : ""} onClick={() => setView("stock")}>Stock Test</button>
+            <button type="button" className={view === "sources" ? "selected" : ""} onClick={() => setView("sources")}>Sources</button>
+          </div>
+
+          <label className="control-group file-control">
+            Import stock CSVs
+            <input type="file" accept=".csv,text/csv" multiple onChange={loadFiles} />
+            <Upload size={17} aria-hidden="true" />
           </label>
 
           <div className="control-grid">
@@ -304,11 +398,18 @@ function App() {
             </label>
           </div>
 
-          <label className="control-group file-control">
-            Historical CSV
-            <input type="file" accept=".csv,text/csv" onChange={loadFile} />
-            <Upload size={17} aria-hidden="true" />
+          <label className="switch-line auto-switch">
+            <input type="checkbox" checked={autoTrain} onChange={(event) => setAutoTrain(event.target.checked)} />
+            <span>Continuously train weights from selected datasets</span>
           </label>
+
+          <div className="factor-panel">
+            <div className="panel-heading">
+              <h2>Research Universe</h2>
+              <span>{selectedCount} selected</span>
+            </div>
+            <DatasetPicker datasets={datasets} onToggle={toggleDataset} />
+          </div>
 
           <div className="factor-panel">
             <div className="panel-heading">
@@ -326,17 +427,17 @@ function App() {
           </div>
 
           <div className="action-row stacked">
-            <button type="button" className="primary" onClick={() => setStatus(result ? "Backtest refreshed" : "Check inputs")}>
-              <Activity size={18} />
-              Backtest
+            <button type="button" className="primary" onClick={applyTraining}>
+              <FlaskConical size={18} />
+              Apply Trained Weights
             </button>
-            <button type="button" onClick={loadDemo}>
+            <button type="button" onClick={resetDemo}>
               <Play size={18} />
-              Demo
+              Reset Demo
             </button>
-            <button type="button" onClick={loadLongHistory}>
-              <Database size={18} />
-              1871 Mode
+            <button type="button" onClick={() => setStatus(portfolio ? "Backtest refreshed" : "Check inputs")}>
+              <Activity size={18} />
+              Refresh
             </button>
           </div>
         </aside>
@@ -344,113 +445,125 @@ function App() {
         <section className="main-stage" aria-label="Prediction dashboard">
           <header className="stage-header">
             <div>
-              <p className="eyebrow">Configurable stock and options model</p>
-              <h2>{(ticker || "TICKER").toUpperCase()} picker</h2>
+              <p className="eyebrow">{view === "research" ? "Multi-stock indicator training" : view === "stock" ? "Point-in-time stock test" : "Data connectors and platform notes"}</p>
+              <h2>{view === "research" ? "Research Desk" : view === "stock" ? `${activeTicker} test` : "Live Information Sources"}</h2>
             </div>
             <div className={`status-pill ${error ? "danger" : ""}`}>{error || status}</div>
           </header>
 
-          {result && (
+          {view === "research" && portfolio && (
             <>
-              <section className="metric-grid" aria-label="Forecast metrics">
-                <MetricCard accent="accent-green" label="Probability Up" value={pct(result.probabilityUp)} note={result.bias} />
-                <MetricCard accent="accent-blue" label="Expected Return" value={pct(result.predictedReturn)} note={`${result.horizon} periods`} />
-                <MetricCard accent="accent-gold" label="Move Edge" value={pct(result.movementEdge)} note={`Expected ${pct(result.expectedMove)}`} />
-                <MetricCard accent="accent-red" label="Options Setup" value={result.bias} note={result.setup} />
+              <section className="metric-grid" aria-label="Research metrics">
+                <MetricCard accent="accent-green" label="Cross-stock accuracy" value={pct(portfolio.accuracy)} note={`${portfolio.testCount} test rows`} />
+                <MetricCard accent="accent-blue" label="Signal hit rate" value={pct(portfolio.hitRate)} note={`${portfolio.signalCount} trades`} />
+                <MetricCard accent="accent-gold" label="Expectancy" value={pct(portfolio.expectancy)} note="per signaled trade" />
+                <MetricCard accent="accent-red" label="Max drawdown" value={pct(portfolio.maxDrawdown)} note="worst tested dataset" />
+              </section>
+
+              <section className="detail-grid wide">
+                <article className="detail-panel">
+                  <div className="panel-heading">
+                    <h2>Indicator Correlation Ranking</h2>
+                    <span>{research.totalRows} historical samples</span>
+                  </div>
+                  <RankingTable rankings={research.rankings} settings={modelSettings} onToggle={updateToggle} onWeight={updateWeight} />
+                </article>
+                <article className="detail-panel">
+                  <div className="panel-heading">
+                    <h2>Dataset Results</h2>
+                    <span>walk-forward split</span>
+                  </div>
+                  <div className="dataset-results">
+                    {portfolio.results.map((item) => (
+                      <div key={item.ticker}>
+                        <strong>{item.ticker}</strong>
+                        <span>{item.coverage}</span>
+                        <small>Accuracy {pct(item.backtest.accuracy)} · Hit {pct(item.backtest.hitRate)} · Expectancy {pct(item.backtest.expectancy)}</small>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </section>
+
+              <SourcePanel />
+            </>
+          )}
+
+          {view === "stock" && stockResult && (
+            <>
+              <section className="stock-toolbar">
+                <label className="control-group">
+                  Stock dataset
+                  <select value={activeTicker} onChange={(event) => { setActiveTicker(event.target.value); setCutoffIndex(360); }}>
+                    {datasets.map((dataset) => <option key={dataset.ticker} value={dataset.ticker}>{dataset.ticker}</option>)}
+                  </select>
+                </label>
+                <label className="control-group">
+                  Test date
+                  <input type="range" min={95 + Math.round(horizon)} max={maxCutoff} value={safeCutoff} onChange={(event) => setCutoffIndex(Number(event.target.value))} />
+                </label>
+                <div className="date-readout">
+                  <strong>{stockResult.date}</strong>
+                  <span>testing through {stockResult.futureDate}</span>
+                </div>
+              </section>
+
+              <section className="metric-grid" aria-label="Stock test metrics">
+                <MetricCard accent="accent-green" label="Predicted direction" value={stockResult.bias} note={`${pct(stockResult.probabilityUp)} probability up`} />
+                <MetricCard accent="accent-blue" label="Predicted move" value={pct(stockResult.predictedReturn)} note={`Expected ${pct(stockResult.expectedMove)}`} />
+                <MetricCard accent="accent-gold" label="Actual move" value={pct(stockResult.realizedReturn)} note={stockResult.directionCorrect ? "Direction passed" : "Direction missed"} />
+                <MetricCard accent="accent-red" label="Options edge" value={pct(stockResult.movementEdge)} note={`Implied ${pct(stockResult.impliedMove)}`} />
               </section>
 
               <section className="chart-band">
                 <div className="chart-panel price-panel">
                   <div className="panel-heading">
-                    <h2>Price Path</h2>
-                    <span>{result.coverage}</span>
+                    <h2>Historical Window</h2>
+                    <span>{stockResult.coverage}</span>
                   </div>
-                  <Sparkline rows={result.rows} />
+                  <Sparkline rows={activeDataset.rows.slice(0, safeCutoff + Math.round(horizon) + 1)} />
                 </div>
                 <div className="chart-panel">
                   <div className="panel-heading">
-                    <h2>Signal Gauge</h2>
-                    <span>Raw {fmt(result.rawScore, 2)}</span>
+                    <h2>Point Signal</h2>
+                    <span>Raw {fmt(stockResult.rawScore, 2)}</span>
                   </div>
-                  <SignalGauge probability={result.probabilityUp} />
+                  <SignalGauge probability={stockResult.probabilityUp} />
                 </div>
               </section>
 
               <section className="detail-grid wide">
                 <article className="detail-panel">
                   <div className="panel-heading">
-                    <h2>Backtest Gate</h2>
-                    <span>{result.backtest.testCount} test rows</span>
+                    <h2>Pre-date Backtest</h2>
+                    <span>{stockResult.backtest.testCount} rows before test</span>
                   </div>
                   <div className="stats-list compact">
-                    <div><span>Accuracy</span><strong>{pct(result.backtest.accuracy)}</strong></div>
-                    <div><span>Signal hit rate</span><strong>{pct(result.backtest.hitRate)}</strong></div>
-                    <div><span>Signals</span><strong>{result.backtest.signalCount}</strong></div>
-                    <div><span>Expectancy</span><strong>{pct(result.backtest.expectancy)}</strong></div>
-                    <div><span>Profit factor</span><strong>{fmt(result.backtest.profitFactor, 2)}</strong></div>
-                    <div><span>Max drawdown</span><strong>{pct(result.backtest.maxDrawdown)}</strong></div>
+                    <div><span>Accuracy</span><strong>{pct(stockResult.backtest.accuracy)}</strong></div>
+                    <div><span>Signal hit rate</span><strong>{pct(stockResult.backtest.hitRate)}</strong></div>
+                    <div><span>Signals</span><strong>{stockResult.backtest.signalCount}</strong></div>
+                    <div><span>Expectancy</span><strong>{pct(stockResult.backtest.expectancy)}</strong></div>
+                    <div><span>Profit factor</span><strong>{fmt(stockResult.backtest.profitFactor, 2)}</strong></div>
+                    <div><span>Max drawdown</span><strong>{pct(stockResult.backtest.maxDrawdown)}</strong></div>
                   </div>
-                  <EquityCurve trades={result.backtest.trades} />
+                  <EquityCurve trades={stockResult.backtest.trades} />
                 </article>
 
                 <article className="detail-panel">
                   <div className="panel-heading">
-                    <h2>Top Factor Pressure</h2>
-                    <span>active weights</span>
-                  </div>
-                  <FactorPressure features={result.features} settings={settings} />
-                </article>
-              </section>
-
-              <section className="detail-grid">
-                <article className="detail-panel span-two">
-                  <div className="panel-heading">
-                    <h2><SlidersHorizontal size={17} /> Top 20 Indicators</h2>
-                    <span>{indicatorCatalog.filter((item) => settings[item.key]?.enabled).length} active</span>
-                  </div>
-                  <IndicatorTable features={result.features} settings={settings} onToggle={updateToggle} onWeight={updateWeight} />
-                </article>
-
-                <article className="detail-panel option-panel">
-                  <div className="panel-heading">
-                    <h2>Options Picker</h2>
-                    <span>IV {fmt(iv, 0)}% · DTE {dte}</span>
+                    <h2>Decision Gate</h2>
+                    <span>{stockResult.directionCorrect ? "passed" : "failed"}</span>
                   </div>
                   <p className="discipline-text">
-                    {result.setup} Implied move is {pct(result.impliedMove)} versus expected move of {pct(result.expectedMove)}. Use this as a filter before selecting calls, puts, spreads, or volatility structures.
+                    At {stockResult.date}, the trained model predicted {stockResult.bias.toLowerCase()} with {pct(stockResult.probabilityUp)} probability up. The actual move by {stockResult.futureDate} was {pct(stockResult.realizedReturn)}.
                   </p>
-                  <div className="discipline-badge"><BarChart3 size={18} /> Stock signal first. Options price second.</div>
-                </article>
-              </section>
-
-              <section className="detail-grid">
-                <article className="detail-panel">
-                  <div className="panel-heading">
-                    <h2>Platform Tools To Borrow</h2>
-                    <span>concept map</span>
-                  </div>
-                  <div className="note-list">
-                    {platformTemplates.map((item) => (
-                      <div key={item.name}>
-                        <strong>{item.name}</strong>
-                        <span>{item.text}</span>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-
-                <article className="detail-panel span-two">
-                  <div className="panel-heading">
-                    <h2>Historical Data Reality</h2>
-                    <span>1800s support</span>
-                  </div>
-                  <div className="note-list columns">
-                    {historicalDataNotes.map((note) => <div key={note}><span>{note}</span></div>)}
-                  </div>
+                  <div className="discipline-badge"><BarChart3 size={18} /> Backtest before live stock picking.</div>
                 </article>
               </section>
             </>
           )}
+
+          {view === "sources" && <SourcePanel />}
         </section>
       </section>
     </main>
