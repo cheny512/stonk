@@ -174,16 +174,41 @@ function OptionsContracts({ options }) {
 function LiveSignalsTable({ payload }) {
   if (!payload?.signals?.length) return null;
   return (
-    <div className="dataset-results">
+    <div className="dataset-results signals-grid">
       {payload.signals.map((s) => (
-        <div key={s.ticker}>
-          <strong>{s.ticker}</strong>
-          <span>{s.bias} · {pct(s.probabilityUp)}</span>
-          <small>
-            {s.options?.available
-              ? `Top ${s.options.side}: ${s.options.contracts?.[0]?.strike ?? "—"} strike`
-              : "No options"}
-          </small>
+        <div key={s.ticker} className={`signal-card ${s.bias?.toLowerCase()}`}>
+          <div className="signal-header">
+            <strong>{s.ticker}</strong>
+            <div className="header-meta">
+              {s.quote && <span className="price-label">${fmt(s.quote.price, 2)}</span>}
+              <span className={`bias-tag ${s.bias?.toLowerCase()}`}>{s.bias}</span>
+            </div>
+          </div>
+          <div className="signal-metrics">
+            <div>
+              <span>Prob Up</span>
+              <strong>{pct(s.probabilityUp)}</strong>
+            </div>
+            <div>
+              <span>Edge</span>
+              <strong className={s.movementEdge > 0 ? "positive" : ""}>{pct(s.movementEdge)}</strong>
+            </div>
+            <div>
+              <span>Expected</span>
+              <strong>{pct(s.expectedMove)}</strong>
+            </div>
+          </div>
+          {s.options?.available && s.options.contracts?.length > 0 && (
+            <div className="top-option">
+              <div className="option-label">Top {s.options.side} recommendation:</div>
+              <div className="option-contract">
+                <strong>{s.options.contracts[0].strike} {s.options.contracts[0].type.toUpperCase()}</strong>
+                <span>${fmt(s.options.contracts[0].mid, 2)}</span>
+                <small>DTE {s.options.contracts[0].dte}</small>
+              </div>
+            </div>
+          )}
+          {!s.options?.available && <div className="no-options">{s.options?.message || "No options data"}</div>}
         </div>
       ))}
     </div>
@@ -450,6 +475,24 @@ function App() {
     }
   };
 
+  const loadTrainedModel = async () => {
+    setBusy("load");
+    setInputError("");
+    try {
+      const trained = await fetchTrainedModel();
+      setSettings(trained.settings);
+      setRankings(trained.rankings);
+      setTrainSamples(trained.totalRows);
+      setTrainValidation(trained.validation || null);
+      setTrainMethod(trained.method || "autonomous");
+      setStatus(`Loaded global model trained on ${trained.totalRows} samples`);
+    } catch (err) {
+      setInputError(err.message);
+    } finally {
+      setBusy("");
+    }
+  };
+
   const handleDownload = async () => {
     setBusy("download");
     setInputError("");
@@ -595,6 +638,10 @@ function App() {
             <button type="button" onClick={runTrain} disabled={!!busy || !backendOnline}>
               <FlaskConical size={18} />
               {busy === "train" ? "Training…" : "Auto-train weights"}
+            </button>
+            <button type="button" onClick={loadTrainedModel} disabled={!!busy || !backendOnline}>
+              <Activity size={18} />
+              {busy === "load" ? "Loading…" : "Load global model"}
             </button>
             <button type="button" onClick={runLive} disabled={!!busy || !backendOnline || !Object.keys(settings).length}>
               <SlidersHorizontal size={18} />

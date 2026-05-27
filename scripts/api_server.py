@@ -204,6 +204,15 @@ def research_train(body: TrainBody) -> dict[str, Any]:
     return trained
 
 
+@app.get("/api/research/model")
+def get_trained_model() -> dict[str, Any]:
+    path = ROOT / "data" / "trained_model.json"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="No trained model found. Run training first.")
+    import json
+    return json.loads(path.read_text())
+
+
 @app.post("/api/live/signals")
 def live_signals(body: LiveSignalsBody) -> dict[str, Any]:
     if not body.tickers:

@@ -832,3 +832,105 @@ button.primary:hover {
 .detail-panel.span-two {
   grid-column: 1 / -1;
 }
+
+.signals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.signal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  transition: transform 0.2s;
+}
+
+.signal-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.signal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.signal-header strong {
+  font-size: 18px;
+}
+
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.price-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--blue);
+}
+
+.bias-tag {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.bias-tag.bullish { background: #e5f3ec; color: var(--green); }
+.bias-tag.bearish { background: #fff5f4; color: var(--red); }
+
+.signal-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  text-align: center;
+}
+
+.signal-metrics div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.signal-metrics span {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.top-option {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.option-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.option-contract {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px;
+  align-items: center;
+}
+
+.option-contract strong {
+  color: var(--blue);
+}
+
+.option-contract small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}

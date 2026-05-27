@@ -176,3 +176,7 @@ export function runStockTest({
 export function fetchDatasetMeta(ticker) {
   return request(`/datasets/${encodeURIComponent(ticker)}/meta`);
 }
+
+export function fetchTrainedModel() {
+  return request("/research/model");
+}
