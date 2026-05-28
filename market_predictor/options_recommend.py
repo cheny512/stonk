@@ -62,12 +62,16 @@ def recommend_option_contracts(
     if probability_up >= confidence:
         side = "call"
         right_filter = {"call", "c"}
+        # Target strike near current price + predicted return
+        target_strike = spot * (1.0 + predicted_return) if spot > 0 else 0
     elif probability_up <= 1.0 - confidence:
         side = "put"
         right_filter = {"put", "p"}
+        target_strike = spot * (1.0 + predicted_return) if spot > 0 else 0
     else:
         side = "neutral"
         right_filter = {"call", "c", "put", "p"}
+        target_strike = spot
 
     candidates = [q for q in bucket if q.right.lower() in right_filter]
     if not candidates:
@@ -78,12 +82,13 @@ def recommend_option_contracts(
             return 0.0
         return q.strike / spot - 1.0
 
-    if side == "call":
-        candidates.sort(key=lambda q: (abs(moneyness(q) - 0.03), -(q.volume or 0), -(q.open_interest or 0)))
-    elif side == "put":
-        candidates.sort(key=lambda q: (abs(moneyness(q) + 0.03), -(q.volume or 0), -(q.open_interest or 0)))
-    else:
-        candidates.sort(key=lambda q: (-(q.volume or 0), abs(moneyness(q))))
+    def strike_score(q: OptionQuote) -> float:
+        """Lower is better. Prioritize strikes near target while keeping liquidity."""
+        dist = abs(q.strike - target_strike) / spot if spot > 0 else 0
+        liquidity = (q.volume or 0) + (q.open_interest or 0) * 0.1
+        return dist * 10.0 - math.log10(max(1, liquidity))
+
+    candidates.sort(key=strike_score)
 
     iv = median_iv or 0.35
     dte = _dte_days(best_exp, chain.as_of)

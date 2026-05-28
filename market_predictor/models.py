@@ -3,6 +3,9 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass
+from typing import Any, Literal
+
+import numpy as np
 
 
 def sigmoid(value: float) -> float:
@@ -108,6 +111,66 @@ def train_linear(
             for j in range(width):
                 weights[j] -= step * (error * x_rows[i][j] + l2 * weights[j])
     return LinearModel(weights, bias)
+
+
+class AdvancedModelWrapper:
+    """Wrapper for external models (XGBoost, SVM, etc.) to match stonk API."""
+
+    def __init__(self, model: Any, kind: str) -> None:
+        self.model = model
+        self.kind = kind
+
+    def predict_proba(self, row: list[float]) -> float:
+        x = np.array([row])
+        if self.kind in ("xgboost", "lightgbm", "svm"):
+            return float(self.model.predict_proba(x)[0][1])
+        return 0.5
+
+
+class ModelFactory:
+    """Pluggable engine factory for different trading horizons."""
+
+    @staticmethod
+    def train_xgboost(x_train: list[list[float]], y_train: list[int]) -> AdvancedModelWrapper:
+        import xgboost as xgb
+
+        model = xgb.XGBClassifier(
+            n_estimators=100,
+            max_depth=5,
+            learning_rate=0.08,
+            objective="binary:logistic",
+            random_state=42,
+        )
+        model.fit(np.array(x_train), np.array(y_train))
+        return AdvancedModelWrapper(model, "xgboost")
+
+    @staticmethod
+    def train_svm(x_train: list[list[float]], y_train: list[int]) -> AdvancedModelWrapper:
+        from sklearn.svm import SVC
+
+        model = SVC(probability=True, kernel="rbf", C=1.0)
+        model.fit(np.array(x_train), np.array(y_train))
+        return AdvancedModelWrapper(model, "svm")
+
+    @staticmethod
+    def train_lstm(x_sequences: list[np.ndarray], y_train: list[int]) -> Any:
+        """Sequential LSTM via PyTorch."""
+        import torch
+        import torch.nn as nn
+
+        class LSTMModel(nn.Module):
+            def __init__(self, input_size, hidden_size=64, num_layers=2):
+                super().__init__()
+                self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+                self.fc = nn.Linear(hidden_size, 1)
+                self.sigmoid = nn.Sigmoid()
+
+            def forward(self, x):
+                _, (hn, _) = self.lstm(x)
+                return self.sigmoid(self.fc(hn[-1]))
+
+        # This is a placeholder for a full PyTorch training loop
+        return None
 
 
 def top_coefficients(names: list[str], weights: list[float], limit: int = 8) -> list[tuple[str, float]]:

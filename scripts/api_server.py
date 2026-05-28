@@ -66,6 +66,7 @@ class TrainBody(BaseModel):
     horizon: int = Field(5, ge=1, le=90)
     catalysts: CatalystsBody | None = None
     method: Literal["autonomous", "correlation"] = "autonomous"
+    model_type: Literal["logistic", "xgboost", "svm"] = "logistic"
     refine: bool = Field(True, description="Polish autonomous weights on validation hit rate")
     train_fraction: float = Field(0.7, ge=0.5, le=0.9)
     confidence: float = Field(0.56, ge=0.51, le=0.9)
@@ -184,8 +185,9 @@ def research_train(body: TrainBody) -> dict[str, Any]:
                 catalysts,
                 train_fraction=body.train_fraction,
                 confidence=body.confidence,
+                model_type=body.model_type,
             )
-            if body.refine:
+            if body.refine and body.model_type == "logistic":
                 polished = refine_weights_coordinate_descent(
                     datasets,
                     body.horizon,

@@ -180,6 +180,7 @@ function LiveSignalsTable({ payload }) {
           <div className="signal-header">
             <strong>{s.ticker}</strong>
             <div className="header-meta">
+              {s.movementEdge > 0 && <span className="edge-badge">High Edge</span>}
               {s.quote && <span className="price-label">${fmt(s.quote.price, 2)}</span>}
               <span className={`bias-tag ${s.bias?.toLowerCase()}`}>{s.bias}</span>
             </div>
@@ -261,6 +262,7 @@ function App() {
   const [iv, setIv] = React.useState(45);
   const [tradeCost, setTradeCost] = React.useState(0.1);
   const [trainFraction, setTrainFraction] = React.useState(0.7);
+  const [modelType, setModelType] = React.useState("logistic");
   const [settings, setSettings] = React.useState({});
   const [rankings, setRankings] = React.useState([]);
   const [trainSamples, setTrainSamples] = React.useState(0);
@@ -329,7 +331,8 @@ function App() {
         horizon: clamp(Math.round(horizon), 1, 90),
         catalysts,
         method: "autonomous",
-        refine: true,
+        modelType,
+        refine: modelType === "logistic",
         trainFraction: clamp(trainFraction, 0.5, 0.9),
         confidence: clamp(confidence, 0.51, 0.9),
       });
@@ -607,6 +610,17 @@ function App() {
             <label className="control-group">
               Train %
               <input type="number" min="0.5" max="0.9" step="0.05" value={trainFraction} onChange={(e) => setTrainFraction(Number(e.target.value))} />
+            </label>
+          </div>
+
+          <div className="control-grid">
+            <label className="control-group">
+              Model Engine
+              <select value={modelType} onChange={(e) => setModelType(e.target.value)}>
+                <option value="logistic">Logistic (Interpretable)</option>
+                <option value="xgboost">XGBoost (Short-term)</option>
+                <option value="svm">SVM (Options Gate)</option>
+              </select>
             </label>
           </div>
 
