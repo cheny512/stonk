@@ -1,6 +1,7 @@
 # stonk
 
-Stock Options Prediction Lab
+Intent is to speed up the process of researching a stock. 
+Figuring out what to buy and when to buy is daunting, especially for new stock traders and people who don't have as much experience. 
 
 A local research tool for estimating short-term stock direction, expected move, and options-relevant setup quality.
 
