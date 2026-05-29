@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from market_predictor.config import api_host, api_port
+from market_predictor.insiders import fetch_insider_activity
 from market_predictor.live_data import (
     fetch_ticker_history,
     get_live_quote,
@@ -22,6 +23,7 @@ from market_predictor.live_data import (
 )
 from market_predictor.live_signals import generate_live_signals
 from market_predictor.options_recommend import attach_options_to_signal
+from market_predictor.stock_research import build_stock_research
 from market_predictor.ui_model import (
     DEFAULT_CATALYSTS,
     INDICATOR_CATALOG,
@@ -281,6 +283,29 @@ def stock_quote(ticker: str) -> dict[str, Any]:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+@app.get("/api/stock/{ticker}/research")
+def stock_research(ticker: str, fundamentals: bool = True) -> dict[str, Any]:
+    try:
+        rows = load_ticker_rows(ticker)
+        return build_stock_research(ticker, rows, include_fundamentals=fundamentals)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/api/stock/{ticker}/insiders")
+def stock_insiders(ticker: str) -> dict[str, Any]:
+    try:
+        return fetch_insider_activity(ticker)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @app.get("/api/datasets/{ticker}/meta")
 def dataset_meta(ticker: str) -> dict[str, Any]:
     try:
@@ -324,6 +349,10 @@ def stock_test(body: StockTestBody) -> dict[str, Any]:
                 result["quote"] = get_live_quote(body.ticker)
             except Exception:
                 result["quote"] = None
+            result["series"] = rows_to_dicts(rows)
+            result["maxCutoff"] = len(rows) - body.horizon - 1
+            result["rowCount"] = len(rows)
+            result["cutoffIndex"] = len(rows) - 1
         else:
             cutoff = _resolve_cutoff(rows, body)
             result = point_in_time_test(

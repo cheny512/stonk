@@ -1,21 +1,64 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import {
-  Activity,
-  BarChart3,
-  Database,
-  Download,
-  FlaskConical,
-  SlidersHorizontal,
-} from "lucide-react";
+  Alert,
+  Autocomplete,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Checkbox,
+  Chip,
+  CssBaseline,
+  Divider,
+  FormControl,
+  FormControlLabel,
+  InputLabel,
+  LinearProgress,
+  ListItemText,
+  MenuItem,
+  Paper,
+  Select,
+  Slider,
+  Stack,
+  Switch,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tabs,
+  TextField,
+  ThemeProvider,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+  Typography,
+  createTheme,
+} from "@mui/material";
+import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
+import AutoGraphIcon from "@mui/icons-material/AutoGraph";
+import CloudSyncIcon from "@mui/icons-material/CloudSync";
+import DownloadIcon from "@mui/icons-material/Download";
+import InsightsIcon from "@mui/icons-material/Insights";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import SavedSearchIcon from "@mui/icons-material/SavedSearch";
+import ScienceIcon from "@mui/icons-material/Science";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
+import StorageIcon from "@mui/icons-material/Storage";
 import {
   downloadUniverse,
   fetchDatasetMeta,
   fetchHealth,
   fetchIndicators,
-  fetchProviders,
+  fetchInsiderActivity,
   fetchLiveSignals,
+  fetchProviders,
   fetchStock,
+  fetchStockResearch,
+  fetchTrainedModel,
   fetchUniverse,
   runPortfolioBacktest,
   runStockTest,
@@ -24,115 +67,116 @@ import {
 import { clamp, defaultCatalysts, pct } from "./engine";
 import "./styles.css";
 
+const theme = createTheme({
+  palette: {
+    mode: "light",
+    background: { default: "#f6f7f9", paper: "#ffffff" },
+    primary: { main: "#146c5c" },
+    secondary: { main: "#275f9f" },
+    success: { main: "#168052" },
+    warning: { main: "#a86f00" },
+    error: { main: "#b7413b" },
+    text: { primary: "#18201f", secondary: "#66716d" },
+  },
+  shape: { borderRadius: 8 },
+  typography: {
+    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    button: { textTransform: "none", fontWeight: 750 },
+    h4: { fontWeight: 800, letterSpacing: 0 },
+    h5: { fontWeight: 800, letterSpacing: 0 },
+    h6: { fontWeight: 800, letterSpacing: 0 },
+  },
+  components: {
+    MuiCard: { styleOverrides: { root: { boxShadow: "0 10px 30px rgba(24, 32, 31, 0.08)" } } },
+    MuiButton: { styleOverrides: { root: { minHeight: 40 } } },
+  },
+});
+
 function fmt(value, digits = 2) {
   if (!Number.isFinite(value)) return "--";
   return value.toFixed(digits);
+}
+
+function money(value, digits = 0) {
+  if (!Number.isFinite(value)) return "--";
+  return value.toLocaleString(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: digits,
+  });
+}
+
+function largeNumber(value) {
+  if (!Number.isFinite(value)) return "--";
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000_000_000) return `${fmt(value / 1_000_000_000_000, 2)}T`;
+  if (abs >= 1_000_000_000) return `${fmt(value / 1_000_000_000, 2)}B`;
+  if (abs >= 1_000_000) return `${fmt(value / 1_000_000, 2)}M`;
+  if (abs >= 1_000) return `${fmt(value / 1_000, 2)}K`;
+  return fmt(value, 0);
+}
+
+function titleize(key) {
+  return key.replace(/([A-Z])/g, " $1").replace(/^./, (ch) => ch.toUpperCase());
+}
+
+function metricColor(value) {
+  if (!Number.isFinite(value)) return "default";
+  if (value > 0) return "success";
+  if (value < 0) return "error";
+  return "default";
 }
 
 function PriceChart({ rows, range = "1Y" }) {
   const width = 900;
   const height = 320;
   const pad = 36;
-
   const sliceData = React.useMemo(() => {
-    if (!rows || rows.length === 0) return [];
-    const countMap = {
-      "1D": 2,
-      "5D": 5,
-      "1M": 21,
-      "3M": 63,
-      "6M": 126,
-      "1Y": 252,
-      "5Y": 252 * 5,
-      "ALL": rows.length,
-    };
-    const count = countMap[range] || 252;
-    return rows.slice(-count);
+    if (!rows?.length) return [];
+    const countMap = { "5D": 5, "1M": 21, "3M": 63, "6M": 126, "1Y": 252, "5Y": 1260, ALL: rows.length };
+    return rows.slice(-(countMap[range] || 252));
   }, [rows, range]);
 
   if (sliceData.length < 2) {
     return (
-      <div className="chart-placeholder">
-        {sliceData.length === 1 ? `Last close: $${sliceData[0].close.toFixed(2)}` : "No data to chart."}
-      </div>
+      <Box sx={{ display: "grid", placeItems: "center", height: 320, color: "text.secondary" }}>
+        {sliceData.length === 1 ? `Last close: $${fmt(sliceData[0].close)}` : "No chart data."}
+      </Box>
     );
   }
 
-  const closes = sliceData.map((r) => r.close);
+  const closes = sliceData.map((row) => row.close);
   const min = Math.min(...closes);
   const max = Math.max(...closes);
-  const range_val = max - min || 0.01;
-
+  const span = max - min || 0.01;
   const points = sliceData
     .map((row, index) => {
       const x = pad + (index / Math.max(1, sliceData.length - 1)) * (width - pad * 2);
-      const y = height - pad - ((row.close - min) / range_val) * (height - pad * 2);
+      const y = height - pad - ((row.close - min) / span) * (height - pad * 2);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(" ");
-
-  // Signal horizontal lines if available (last point)
-  const lastRow = sliceData[sliceData.length - 1];
+  const last = sliceData.at(-1);
+  const lastY = height - pad - ((last.close - min) / span) * (height - pad * 2);
 
   return (
-    <div className="price-chart-container">
+    <Box sx={{ overflow: "hidden", border: "1px solid", borderColor: "divider", borderRadius: 2, mt: 2 }}>
       <svg className="chart-svg enhanced" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Price chart">
-        <defs>
-          <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="var(--green)" stopOpacity="0.1" />
-            <stop offset="100%" stopColor="var(--green)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
         {[0, 1, 2, 3].map((line) => {
           const y = pad + ((height - pad * 2) / 3) * line;
           return <line key={line} x1={pad} x2={width - pad} y1={y} y2={y} className="grid-line" strokeDasharray="4 4" />;
         })}
-        <polyline
-          points={`${pad},${height - pad} ${points} ${width - pad},${height - pad}`}
-          fill="url(#chartGradient)"
-          stroke="none"
-        />
-        <polyline points={points} fill="none" className="price-line" strokeWidth="2.5" />
-        
-        {/* Current price indicator */}
-        <line 
-          x1={pad} 
-          x2={width - pad} 
-          y1={height - pad - ((lastRow.close - min) / range_val) * (height - pad * 2)} 
-          y2={height - pad - ((lastRow.close - min) / range_val) * (height - pad * 2)} 
-          className="current-price-line" 
-          strokeDasharray="2 2"
-        />
-
-        <text x={pad} y={24} className="chart-label highlight">${max.toFixed(2)}</text>
-        <text x={pad} y={height - 12} className="chart-label">${min.toFixed(2)}</text>
-        <text x={width - pad} y={height - pad - ((lastRow.close - min) / range_val) * (height - pad * 2) - 4} className="chart-label current" textAnchor="end">
-          NOW: ${lastRow.close.toFixed(2)}
+        <polyline points={points} fill="none" className="price-line" />
+        <line x1={pad} x2={width - pad} y1={lastY} y2={lastY} className="current-price-line" strokeDasharray="3 3" />
+        <text x={pad} y={24} className="chart-label highlight">${fmt(max)}</text>
+        <text x={pad} y={height - 12} className="chart-label">${fmt(min)}</text>
+        <text x={width - pad} y={lastY - 6} className="chart-label current" textAnchor="end">
+          ${fmt(last.close)}
         </text>
-        
-        {/* Date labels */}
         <text x={pad} y={height - 4} className="chart-label date">{sliceData[0].date}</text>
-        <text x={width - pad} y={height - 4} className="chart-label date" textAnchor="end">{sliceData[sliceData.length - 1].date}</text>
+        <text x={width - pad} y={height - 4} className="chart-label date" textAnchor="end">{last.date}</text>
       </svg>
-    </div>
-  );
-}
-
-function TimeRangeSelector({ active, onChange }) {
-  const ranges = ["5D", "1M", "3M", "6M", "1Y", "5Y", "ALL"];
-  return (
-    <div className="time-range-tabs">
-      {ranges.map((r) => (
-        <button
-          key={r}
-          type="button"
-          className={active === r ? "selected" : ""}
-          onClick={() => onChange(r)}
-        >
-          {r}
-        </button>
-      ))}
-    </div>
+    </Box>
   );
 }
 
@@ -141,192 +185,318 @@ function EquityCurve({ trades }) {
   const height = 180;
   const pad = 28;
   let cumulative = 0;
-  const curve = (trades || []).map((trade) => {
+  const data = (trades || []).map((trade) => {
     cumulative += trade.pnl;
     return cumulative;
   });
-  const data = curve.length ? curve : [0];
-  const min = Math.min(...data, 0);
-  const max = Math.max(...data, 0);
-  const points = data
+  const curve = data.length ? data : [0];
+  const min = Math.min(...curve, 0);
+  const max = Math.max(...curve, 0);
+  const points = curve
     .map((value, index) => {
-      const x = pad + (index / Math.max(1, data.length - 1)) * (width - pad * 2);
+      const x = pad + (index / Math.max(1, curve.length - 1)) * (width - pad * 2);
       const y = height - pad - ((value - min) / Math.max(0.0001, max - min)) * (height - pad * 2);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(" ");
   return (
-    <svg className="mini-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Backtest equity curve">
-      <line x1={pad} x2={width - pad} y1={height - pad} y2={height - pad} className="grid-line" />
-      <polyline points={points} fill="none" className="equity-line" />
-    </svg>
+    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, mt: 2, overflow: "hidden" }}>
+      <svg className="mini-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Backtest equity curve">
+        <line x1={pad} x2={width - pad} y1={height - pad} y2={height - pad} className="grid-line" />
+        <polyline points={points} fill="none" className="equity-line" />
+      </svg>
+    </Box>
   );
 }
 
-function SignalGauge({ probability }) {
-  const angle = -90 + probability * 180;
-  const color = probability >= 0.56 ? "var(--green)" : probability <= 0.44 ? "var(--red)" : "var(--gold)";
+function MetricCard({ label, value, note, color = "primary" }) {
   return (
-    <div className="gauge-wrap compact-gauge" role="img" aria-label={`Signal gauge ${pct(probability)}`}>
-      <div className="gauge-arc" />
-      <div className="gauge-fill" style={{ "--fill": `${probability * 100}%`, "--gauge-color": color }} />
-      <div className="needle" style={{ transform: `rotate(${angle}deg)` }} />
-      <strong>{pct(probability)}</strong>
-      <span>bearish&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bullish</span>
-    </div>
+    <Card variant="outlined">
+      <CardContent>
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800, textTransform: "uppercase" }}>
+          {label}
+        </Typography>
+        <Typography variant="h5" color={`${color}.main`} sx={{ mt: 1 }}>
+          {value}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+          {note}
+        </Typography>
+      </CardContent>
+    </Card>
   );
 }
 
-function MetricCard({ accent, label, value, note }) {
+function SectionCard({ title, action, children, id }) {
   return (
-    <article className={`metric-card ${accent}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{note}</small>
-    </article>
+    <Card variant="outlined" id={id}>
+      <CardContent>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} sx={{ mb: 2 }}>
+          <Typography variant="h6">{title}</Typography>
+          {action}
+        </Stack>
+        {children}
+      </CardContent>
+    </Card>
   );
 }
 
-function DatasetPicker({ datasets, onToggle, onSelectAll }) {
+function DatasetPicker({ datasets, onChange, onSelectAll }) {
+  const ready = datasets.filter((dataset) => dataset.ready);
+  const selected = ready.filter((dataset) => dataset.selected);
   return (
-    <div className="dataset-list">
-      <div className="dataset-actions">
-        <button type="button" onClick={() => onSelectAll(true)}>Select all ready</button>
-        <button type="button" onClick={() => onSelectAll(false)}>Clear</button>
-      </div>
-      {datasets.map((dataset) => (
-        <label className={`dataset-row ${dataset.ready ? "" : "disabled"}`} key={dataset.ticker}>
-          <input
-            type="checkbox"
-            checked={dataset.selected}
-            disabled={!dataset.ready}
-            onChange={(event) => onToggle(dataset.ticker, event.target.checked)}
-          />
-          <span>
-            <strong>{dataset.ticker}</strong>
-            <small>
-              {dataset.ready
-                ? `${dataset.rows} rows · ${dataset.start} → ${dataset.end}`
-                : dataset.error || "Not downloaded"}
-            </small>
-          </span>
-        </label>
-      ))}
-    </div>
+    <Stack spacing={1.5}>
+      <Autocomplete
+        multiple
+        disableCloseOnSelect
+        size="small"
+        options={ready}
+        value={selected}
+        getOptionLabel={(option) => option.ticker}
+        isOptionEqualToValue={(option, value) => option.ticker === value.ticker}
+        onChange={(_, value) => onChange(value.map((item) => item.ticker))}
+        renderOption={(props, option, { selected: isSelected }) => (
+          <li {...props} key={option.ticker}>
+            <Checkbox checked={isSelected} size="small" />
+            <ListItemText
+              primary={option.ticker}
+              secondary={`${option.rows} rows · ${option.start} to ${option.end}`}
+            />
+          </li>
+        )}
+        renderInput={(params) => <TextField {...params} label="Training universe" placeholder="Select tickers" />}
+      />
+      <Stack direction="row" spacing={1}>
+        <Button fullWidth size="small" variant="outlined" onClick={() => onSelectAll(true)}>
+          Select ready
+        </Button>
+        <Button fullWidth size="small" variant="outlined" onClick={() => onSelectAll(false)}>
+          Clear
+        </Button>
+      </Stack>
+    </Stack>
+  );
+}
+
+function RankingTable({ rankings, settings, onToggle, onWeight }) {
+  if (!rankings.length) return null;
+  return (
+    <TableContainer component={Paper} variant="outlined">
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Indicator</TableCell>
+            <TableCell>Group</TableCell>
+            <TableCell align="right">Learned</TableCell>
+            <TableCell align="right">Weight</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rankings.map((indicator, index) => {
+            const setting = settings[indicator.key] || { enabled: true, weight: 0 };
+            return (
+              <TableRow key={indicator.key}>
+                <TableCell>
+                  <FormControlLabel
+                    control={<Switch checked={Boolean(setting.enabled)} onChange={(event) => onToggle(indicator.key, event.target.checked)} />}
+                    label={`${index + 1}. ${indicator.label}`}
+                  />
+                </TableCell>
+                <TableCell><Chip size="small" label={indicator.group} /></TableCell>
+                <TableCell align="right">
+                  <Typography color={indicator.correlation >= 0 ? "success.main" : "error.main"} fontWeight={800}>
+                    {indicator.learnedWeight != null ? fmt(indicator.learnedWeight, 2) : fmt(indicator.correlation, 3)}
+                  </Typography>
+                </TableCell>
+                <TableCell align="right" sx={{ width: 110 }}>
+                  <TextField
+                    size="small"
+                    type="number"
+                    inputProps={{ min: -3, max: 3, step: 0.05 }}
+                    value={setting.weight ?? 0}
+                    onChange={(event) => onWeight(indicator.key, Number(event.target.value))}
+                  />
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
   );
 }
 
 function OptionsContracts({ options }) {
   if (!options?.available) {
-    return <p className="discipline-text">{options?.message || "No options data."}</p>;
+    return <Alert severity="info">{options?.message || "No options chain available for this signal."}</Alert>;
   }
   return (
-    <div className="options-panel">
-      <p className="discipline-text">
-        {options.side?.toUpperCase()} bias · exp {options.targetExpiration} ({options.targetDte} DTE) · IV{" "}
-        {options.medianIv != null ? `${(options.medianIv * 100).toFixed(1)}%` : "—"} · {options.setup?.setup}
-      </p>
-      <div className="options-table">
-        <div className="options-header">
-          <span>Contract</span>
-          <span>Strike</span>
-          <span>Mid</span>
-          <span>IV</span>
-          <span>Δ</span>
-          <span>OI</span>
-        </div>
-        {(options.contracts || []).map((c) => (
-          <div className="options-row" key={`${c.symbol}-${c.strike}`}>
-            <span>{c.type}</span>
-            <span>{fmt(c.strike, 2)}</span>
-            <span>{fmt(c.mid, 2)}</span>
-            <span>{c.impliedVol != null ? pct(c.impliedVol) : "—"}</span>
-            <span>{c.delta != null ? fmt(c.delta, 2) : "—"}</span>
-            <span>{c.openInterest != null ? Math.round(c.openInterest) : "—"}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+    <Stack spacing={2}>
+      <Alert severity="success">
+        {options.side?.toUpperCase()} bias · exp {options.targetExpiration} · IV{" "}
+        {options.medianIv != null ? pct(options.medianIv) : "--"} · {options.setup?.setup}
+      </Alert>
+      <TableContainer component={Paper} variant="outlined">
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Type</TableCell>
+              <TableCell align="right">Strike</TableCell>
+              <TableCell align="right">Mid</TableCell>
+              <TableCell align="right">IV</TableCell>
+              <TableCell align="right">Delta</TableCell>
+              <TableCell align="right">OI</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {(options.contracts || []).map((contract) => (
+              <TableRow key={`${contract.symbol}-${contract.strike}`}>
+                <TableCell>{contract.type}</TableCell>
+                <TableCell align="right">{fmt(contract.strike)}</TableCell>
+                <TableCell align="right">{fmt(contract.mid)}</TableCell>
+                <TableCell align="right">{contract.impliedVol != null ? pct(contract.impliedVol) : "--"}</TableCell>
+                <TableCell align="right">{contract.delta != null ? fmt(contract.delta, 2) : "--"}</TableCell>
+                <TableCell align="right">{contract.openInterest != null ? Math.round(contract.openInterest) : "--"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Stack>
   );
 }
 
 function LiveSignalsTable({ payload }) {
   if (!payload?.signals?.length) return null;
   return (
-    <div className="dataset-results signals-grid">
-      {payload.signals.map((s) => (
-        <div key={s.ticker} className={`signal-card ${s.bias?.toLowerCase()}`}>
-          <div className="signal-header">
-            <strong>{s.ticker}</strong>
-            <div className="header-meta">
-              {s.movementEdge > 0 && <span className="edge-badge">High Edge</span>}
-              {s.quote && <span className="price-label">${fmt(s.quote.price, 2)}</span>}
-              <span className={`bias-tag ${s.bias?.toLowerCase()}`}>{s.bias}</span>
-            </div>
-          </div>
-          <div className="signal-metrics">
-            <div>
-              <span>Prob Up</span>
-              <strong>{pct(s.probabilityUp)}</strong>
-            </div>
-            <div>
-              <span>Edge</span>
-              <strong className={s.movementEdge > 0 ? "positive" : ""}>{pct(s.movementEdge)}</strong>
-            </div>
-            <div>
-              <span>Expected</span>
-              <strong>{pct(s.expectedMove)}</strong>
-            </div>
-          </div>
-          {s.options?.available && s.options.contracts?.length > 0 && (
-            <div className="top-option">
-              <div className="option-label">Top {s.options.side} recommendation:</div>
-              <div className="option-contract">
-                <strong>{s.options.contracts[0].strike} {s.options.contracts[0].type.toUpperCase()}</strong>
-                <span>${fmt(s.options.contracts[0].mid, 2)}</span>
-                <small>DTE {s.options.contracts[0].dte}</small>
-              </div>
-            </div>
-          )}
-          {!s.options?.available && <div className="no-options">{s.options?.message || "No options data"}</div>}
-        </div>
+    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 2 }}>
+      {payload.signals.map((signal) => (
+        <Card variant="outlined" key={signal.ticker}>
+          <CardContent>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Typography variant="h6">{signal.ticker}</Typography>
+              <Chip color={signal.bias === "Bullish" ? "success" : signal.bias === "Bearish" ? "error" : "default"} label={signal.bias} size="small" />
+            </Stack>
+            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1.5, mt: 2 }}>
+              <MetricMini label="Up" value={pct(signal.probabilityUp)} />
+              <MetricMini label="Edge" value={pct(signal.movementEdge)} color={metricColor(signal.movementEdge)} />
+              <MetricMini label="Move" value={pct(signal.expectedMove)} />
+            </Box>
+            {signal.options?.available && signal.options.contracts?.[0] && (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                {signal.options.contracts[0].strike} {signal.options.contracts[0].type?.toUpperCase()} · ${fmt(signal.options.contracts[0].mid)}
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
       ))}
-    </div>
+    </Box>
   );
 }
 
-function RankingTable({ rankings, settings, onToggle, onWeight }) {
+function MetricMini({ label, value, color = "default" }) {
   return (
-    <div className="indicator-table">
-      {rankings.map((indicator, index) => {
-        const setting = settings[indicator.key];
-        return (
-          <div className="indicator-row ranked" key={indicator.key}>
-            <label className="switch-line">
-              <input
-                type="checkbox"
-                checked={Boolean(setting?.enabled)}
-                onChange={(event) => onToggle(indicator.key, event.target.checked)}
-              />
-              <span>{index + 1}. {indicator.label}</span>
-            </label>
-            <span className="group-tag">{indicator.group}</span>
-            <strong className={indicator.correlation >= 0 ? "positive" : "negative"} title="Learned weight">
-              {indicator.learnedWeight != null ? fmt(indicator.learnedWeight, 2) : `${indicator.correlation >= 0 ? "+" : ""}${fmt(indicator.correlation, 3)}`}
-            </strong>
-            <input
-              type="number"
-              min="-3"
-              max="3"
-              step="0.05"
-              value={setting?.weight ?? 0}
-              onChange={(event) => onWeight(indicator.key, Number(event.target.value))}
-              aria-label={`${indicator.label} weight`}
-            />
-          </div>
-        );
-      })}
-    </div>
+    <Box sx={{ p: 1, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+      <Typography variant="caption" color="text.secondary">{label}</Typography>
+      <Typography fontWeight={850} color={color === "default" ? "text.primary" : `${color}.main`}>{value}</Typography>
+    </Box>
+  );
+}
+
+function InsiderPanel({ activity, error }) {
+  if (error) return <Alert severity="warning">{error}</Alert>;
+  if (!activity) return <Alert severity="info">Insider activity will load after a ticker is selected.</Alert>;
+  return (
+    <Stack spacing={2}>
+      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 1.5 }}>
+        <MetricMini label="Purchases" value={money(activity.purchaseValue)} color="success" />
+        <MetricMini label="Sales" value={money(activity.saleValue)} color="error" />
+        <MetricMini label="Net" value={money(activity.netValue)} color={metricColor(activity.netValue)} />
+        <MetricMini label="Filings" value={String(activity.filingCount)} />
+      </Box>
+      <Typography variant="caption" color="text.secondary">
+        {activity.source} · {activity.company} · latest {activity.latestFilingDate || "--"}
+      </Typography>
+      <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 360 }}>
+        <Table size="small" stickyHeader>
+          <TableHead>
+            <TableRow>
+              <TableCell>Insider</TableCell>
+              <TableCell>Date</TableCell>
+              <TableCell>Code</TableCell>
+              <TableCell align="right">Shares</TableCell>
+              <TableCell align="right">Price</TableCell>
+              <TableCell align="right">Value</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {(activity.transactions || []).map((transaction, index) => (
+              <TableRow key={`${transaction.accessionNumber}-${index}`}>
+                <TableCell>
+                  <Typography variant="body2" fontWeight={750}>{transaction.owner}</Typography>
+                  <Typography variant="caption" color="text.secondary">{transaction.relationship?.officerTitle || "Insider"}</Typography>
+                </TableCell>
+                <TableCell>{transaction.date}</TableCell>
+                <TableCell><Chip size="small" label={transaction.code || "--"} /></TableCell>
+                <TableCell align="right">{transaction.shares != null ? fmt(transaction.shares, 0) : "--"}</TableCell>
+                <TableCell align="right">{transaction.price != null ? money(transaction.price, 2) : "--"}</TableCell>
+                <TableCell align="right">{transaction.value != null ? money(transaction.value) : "--"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Stack>
+  );
+}
+
+function ResearchSummaryPanel({ summary, error }) {
+  if (error) return <Alert severity="warning">{error}</Alert>;
+  if (!summary) return <Alert severity="info">Load a ticker to build the research summary.</Alert>;
+
+  const fundamentals = summary.fundamentals || {};
+  const metrics = fundamentals.metrics || {};
+  return (
+    <Stack spacing={2}>
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+        <Chip label={fundamentals.name || summary.ticker} color="primary" />
+        {fundamentals.sector && <Chip label={fundamentals.sector} />}
+        {fundamentals.industry && <Chip label={fundamentals.industry} />}
+        <Chip label={`${summary.history.rows} daily bars`} />
+      </Stack>
+
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, gap: 1.5 }}>
+        <MetricMini label="5D return" value={pct(summary.history.return5d)} color={metricColor(summary.history.return5d)} />
+        <MetricMini label="1M return" value={pct(summary.history.return1m)} color={metricColor(summary.history.return1m)} />
+        <MetricMini label="YTD return" value={pct(summary.history.ytdReturn)} color={metricColor(summary.history.ytdReturn)} />
+        <MetricMini label="1Y return" value={pct(summary.history.return1y)} color={metricColor(summary.history.return1y)} />
+        <MetricMini label="20D vol" value={pct(summary.volatility.realized20d)} />
+        <MetricMini label="60D vol" value={pct(summary.volatility.realized60d)} />
+        <MetricMini label="ATR 14" value={pct(summary.volatility.atr14)} />
+        <MetricMini label="Avg day move" value={pct(summary.volatility.averageDailyMove20d)} />
+        <MetricMini label="Latest volume" value={largeNumber(summary.volume.latestVolume)} />
+        <MetricMini label="Relative volume" value={`${fmt(summary.volume.relativeVolume20d, 2)}x`} />
+        <MetricMini label="Buy pressure" value={pct(summary.volume.buyPressure20d)} color={metricColor((summary.volume.buyPressure20d ?? 0.5) - 0.5)} />
+        <MetricMini label="20D volume trend" value={pct(summary.volume.volumeTrend20v60)} color={metricColor(summary.volume.volumeTrend20v60)} />
+      </Box>
+
+      <Divider />
+
+      {fundamentals.available ? (
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, gap: 1.5 }}>
+          <MetricMini label="Market cap" value={largeNumber(metrics.marketCap)} />
+          <MetricMini label="Trailing PE" value={fmt(metrics.trailingPE, 2)} />
+          <MetricMini label="Forward PE" value={fmt(metrics.forwardPE, 2)} />
+          <MetricMini label="P/S" value={fmt(metrics.priceToSales, 2)} />
+          <MetricMini label="Revenue growth" value={pct(metrics.revenueGrowth)} color={metricColor(metrics.revenueGrowth)} />
+          <MetricMini label="Earnings growth" value={pct(metrics.earningsGrowth)} color={metricColor(metrics.earningsGrowth)} />
+          <MetricMini label="Profit margin" value={pct(metrics.profitMargins)} />
+          <MetricMini label="ROE" value={pct(metrics.returnOnEquity)} />
+        </Box>
+      ) : (
+        <Alert severity="info">{fundamentals.message || "Fundamentals unavailable from yfinance."}</Alert>
+      )}
+    </Stack>
   );
 }
 
@@ -350,6 +520,10 @@ function App() {
   const [liveSignals, setLiveSignals] = React.useState(null);
   const [portfolio, setPortfolio] = React.useState(null);
   const [stockResult, setStockResult] = React.useState(null);
+  const [researchSummary, setResearchSummary] = React.useState(null);
+  const [researchError, setResearchError] = React.useState("");
+  const [insiderActivity, setInsiderActivity] = React.useState(null);
+  const [insiderError, setInsiderError] = React.useState("");
   const [cutoffIndex, setCutoffIndex] = React.useState(360);
   const [maxCutoff, setMaxCutoff] = React.useState(400);
   const [dateLabels, setDateLabels] = React.useState([]);
@@ -364,21 +538,57 @@ function App() {
   const [busy, setBusy] = React.useState("");
 
   const selectedTickers = React.useMemo(
-    () => datasets.filter((d) => d.selected && d.ready).map((d) => d.ticker),
+    () => datasets.filter((dataset) => dataset.selected && dataset.ready).map((dataset) => dataset.ticker),
     [datasets],
   );
+  const readyTickers = React.useMemo(() => datasets.filter((dataset) => dataset.ready).map((dataset) => dataset.ticker), [datasets]);
+  const modelReady = Object.keys(settings).length > 0;
+  const sliderMin = Math.min(maxCutoff, 70 + Math.round(horizon));
+  const testDateLabel = dateLabels[cutoffIndex] || stockResult?.date || "--";
+  const error = inputError;
 
   const refreshUniverse = React.useCallback(async () => {
     const data = await fetchUniverse(false);
     setDatasets((current) => {
-      const selected = new Set(current.filter((d) => d.selected).map((d) => d.ticker));
+      const selected = new Set(current.filter((dataset) => dataset.selected).map((dataset) => dataset.ticker));
       return data.tickers.map((item) => ({
         ...item,
         selected: selected.has(item.ticker) || item.ready,
         kind: "S&P 500 CSV",
       }));
     });
-    setStatus(`${data.ready} of ${data.count} S&P 500 tickers ready (10y CSV)`);
+    setStatus(`${data.ready} of ${data.count} S&P 500 tickers ready`);
+  }, []);
+
+  const setSelectedTickers = (tickers) => {
+    const selected = new Set(tickers);
+    setDatasets((current) => current.map((dataset) => ({ ...dataset, selected: selected.has(dataset.ticker) })));
+  };
+
+  const selectAllReady = (on) => {
+    setDatasets((current) => current.map((dataset) => ({ ...dataset, selected: on ? dataset.ready : false })));
+  };
+
+  const loadInsiders = React.useCallback(async (ticker) => {
+    if (!ticker) return;
+    setInsiderActivity(null);
+    setInsiderError("");
+    try {
+      setInsiderActivity(await fetchInsiderActivity(ticker));
+    } catch (err) {
+      setInsiderError(err.message);
+    }
+  }, []);
+
+  const loadResearchSummary = React.useCallback(async (ticker) => {
+    if (!ticker) return;
+    setResearchSummary(null);
+    setResearchError("");
+    try {
+      setResearchSummary(await fetchStockResearch(ticker));
+    } catch (err) {
+      setResearchError(err.message);
+    }
   }, []);
 
   React.useEffect(() => {
@@ -390,28 +600,30 @@ function App() {
         if (meta.defaultCatalysts) setCatalysts(meta.defaultCatalysts);
         setProviders(await fetchProviders());
         await refreshUniverse();
-        
-        // Auto-load global model if it exists
         try {
           const trained = await fetchTrainedModel();
-          if (trained && trained.settings) {
-            setSettings(trained.settings);
-            setRankings(trained.rankings || []);
-            setTrainSamples(trained.totalRows || 0);
-            setTrainValidation(trained.validation || null);
-            setTrainMethod(trained.method || "autonomous");
-            setStatus(`Loaded global model (${trained.totalRows} samples)`);
-          }
-        } catch (e) {
-          // No global model yet, that's fine
+          setSettings(trained.settings || {});
+          setRankings(trained.rankings || []);
+          setTrainSamples(trained.totalRows || 0);
+          setTrainValidation(trained.validation || null);
+          setTrainMethod(trained.method || "autonomous");
+          setStatus(`Loaded global model (${trained.totalRows || 0} samples)`);
+        } catch {
+          setStatus("API connected. No saved model loaded yet.");
         }
       } catch (err) {
         setBackendOnline(false);
         setInputError(err.message);
-        setStatus("Start the API: npm run dev (from ui/) or python3 scripts/api_server.py");
+        setStatus("Start the API with npm run dev from ui/");
       }
     })();
   }, [refreshUniverse]);
+
+  React.useEffect(() => {
+    if (view !== "stock" || !activeTicker) return;
+    loadResearchSummary(activeTicker);
+    loadInsiders(activeTicker);
+  }, [activeTicker, loadInsiders, loadResearchSummary, view]);
 
   const runTrain = async () => {
     if (!selectedTickers.length) {
@@ -431,17 +643,12 @@ function App() {
         trainFraction: clamp(trainFraction, 0.5, 0.9),
         confidence: clamp(confidence, 0.51, 0.9),
       });
-      setSettings(trained.settings);
-      setRankings(trained.rankings);
-      setTrainSamples(trained.totalRows);
+      setSettings(trained.settings || {});
+      setRankings(trained.rankings || []);
+      setTrainSamples(trained.totalRows || 0);
       setTrainValidation(trained.validation || null);
       setTrainMethod(trained.method || "autonomous");
-      const valNote = trained.validation
-        ? ` · val hit ${pct(trained.validation.hitRate)} · val acc ${pct(trained.validation.accuracy)}`
-        : "";
-      setStatus(
-        `Autonomous training on ${trained.totalRows} samples (${trained.enabledIndicators ?? "?"} indicators active)${valNote}`,
-      );
+      setStatus(`Trained ${trained.method || "model"} on ${trained.totalRows || 0} samples`);
     } catch (err) {
       setInputError(err.message);
     } finally {
@@ -454,8 +661,8 @@ function App() {
       setInputError("Select at least one ticker.");
       return;
     }
-    if (!Object.keys(settings).length) {
-      setInputError("Train the model first.");
+    if (!modelReady) {
+      setInputError("Train or load a model first.");
       return;
     }
     setBusy("backtest");
@@ -471,7 +678,7 @@ function App() {
         trainFraction: clamp(trainFraction, 0.5, 0.9),
       });
       setPortfolio(result);
-      setStatus(`Walk-forward backtest on ${selectedTickers.length} stocks`);
+      setStatus(`Backtested ${selectedTickers.length} stocks`);
     } catch (err) {
       setInputError(err.message);
     } finally {
@@ -480,8 +687,9 @@ function App() {
   };
 
   const runStockTestAction = async (ticker, { cutoff, mode, silent = false } = {}) => {
-    if (!ticker || !Object.keys(settings).length) {
-      if (!silent) setInputError("Train the model on Research first.");
+    const symbol = (ticker || "").trim().toUpperCase();
+    if (!symbol || !modelReady) {
+      if (!silent) setInputError("Select a ticker and train or load a model first.");
       return;
     }
     const useMode = mode || testMode;
@@ -489,7 +697,7 @@ function App() {
     setInputError("");
     try {
       const result = await runStockTest({
-        ticker,
+        ticker: symbol,
         mode: useMode,
         cutoffIndex: useMode === "historical" ? cutoff ?? cutoffIndex : undefined,
         refresh: refreshBeforeTest,
@@ -508,11 +716,7 @@ function App() {
       setMaxCutoff(result.maxCutoff ?? maxCutoff);
       if (result.dates) setDateLabels(result.dates);
       if (result.cutoffIndex != null) setCutoffIndex(result.cutoffIndex);
-      setStatus(
-        useMode === "latest"
-          ? `Latest signal for ${ticker} as of ${result.date}`
-          : `Historical test for ${ticker} at ${result.date}`,
-      );
+      setStatus(useMode === "latest" ? `Latest signal for ${symbol}` : `Historical test for ${symbol} on ${result.date}`);
     } catch (err) {
       if (!silent) setInputError(err.message);
     } finally {
@@ -520,8 +724,16 @@ function App() {
     }
   };
 
-  const loadTicker = async (symbol) => {
-    const ticker = (symbol || tickerInput).trim().toUpperCase();
+  const applyDatasetMeta = async (ticker) => {
+    const meta = await fetchDatasetMeta(ticker);
+    setDateLabels(meta.dates || []);
+    setMaxCutoff(meta.maxCutoff);
+    const min = Math.min(meta.maxCutoff, 70 + Math.round(horizon));
+    setCutoffIndex(Math.min(meta.maxCutoff, Math.max(min, meta.maxCutoff - 1)));
+  };
+
+  const loadTicker = async (symbol = tickerInput) => {
+    const ticker = (symbol || "").trim().toUpperCase();
     if (!ticker) return;
     setBusy("fetch");
     setInputError("");
@@ -529,27 +741,49 @@ function App() {
       const fetched = await fetchStock({ ticker, years: 10, provider: "auto" });
       setActiveTicker(ticker);
       setTickerInput(ticker);
-      const meta = await fetchDatasetMeta(ticker);
-      setDateLabels(meta.dates || []);
-      const safe = Math.max(95 + Math.round(horizon), meta.maxCutoff - 1);
-      setCutoffIndex(safe);
-      setMaxCutoff(meta.maxCutoff);
+      await applyDatasetMeta(ticker);
       await refreshUniverse();
-      setStatus(`Loaded ${ticker} via ${fetched.provider} (${fetched.start} → ${fetched.end})`);
-      
-      // Auto-run test if model is trained
-      if (Object.keys(settings).length) {
+      loadResearchSummary(ticker);
+      loadInsiders(ticker);
+      setStatus(`Loaded ${ticker} via ${fetched.provider} (${fetched.start} to ${fetched.end})`);
+      if (modelReady) {
         await runStockTestAction(ticker, { mode: testMode, silent: true });
       }
     } catch (err) {
-      setInputError(err.message);
+      try {
+        await applyDatasetMeta(ticker);
+        setActiveTicker(ticker);
+        setTickerInput(ticker);
+        loadResearchSummary(ticker);
+        loadInsiders(ticker);
+        setStatus(`Loaded cached ${ticker}; refresh failed: ${err.message}`);
+      } catch {
+        setInputError(err.message);
+      }
     } finally {
       setBusy("");
     }
   };
 
+  const onActiveTickerChange = async (ticker) => {
+    if (!ticker) return;
+    const symbol = ticker.toUpperCase();
+    setActiveTicker(symbol);
+    setTickerInput(symbol);
+    try {
+      await applyDatasetMeta(symbol);
+      loadResearchSummary(symbol);
+      loadInsiders(symbol);
+      if (modelReady) {
+        await runStockTestAction(symbol, { mode: testMode, silent: true });
+      }
+    } catch (err) {
+      setInputError(err.message);
+    }
+  };
+
   const runLive = async () => {
-    if (!selectedTickers.length || !Object.keys(settings).length) {
+    if (!selectedTickers.length || !modelReady) {
       setInputError("Train first and select tickers.");
       return;
     }
@@ -583,12 +817,12 @@ function App() {
     setInputError("");
     try {
       const trained = await fetchTrainedModel();
-      setSettings(trained.settings);
-      setRankings(trained.rankings);
-      setTrainSamples(trained.totalRows);
+      setSettings(trained.settings || {});
+      setRankings(trained.rankings || []);
+      setTrainSamples(trained.totalRows || 0);
       setTrainValidation(trained.validation || null);
       setTrainMethod(trained.method || "autonomous");
-      setStatus(`Loaded global model trained on ${trained.totalRows} samples`);
+      setStatus(`Loaded global model (${trained.totalRows || 0} samples)`);
     } catch (err) {
       setInputError(err.message);
     } finally {
@@ -599,13 +833,13 @@ function App() {
   const handleDownload = async () => {
     setBusy("download");
     setInputError("");
-    setStatus("Downloading 10 years of S&P 500 daily CSVs (this can take a while)…");
+    setStatus("Downloading S&P 500 daily history");
     try {
       const result = await downloadUniverse({ years: 10 });
       await refreshUniverse();
       setStatus(`Downloaded ${result.downloaded} tickers; ${result.readyCount} ready`);
       if (result.failed && Object.keys(result.failed).length) {
-        setInputError(`${Object.keys(result.failed).length} tickers failed (see API log)`);
+        setInputError(`${Object.keys(result.failed).length} tickers failed. Check API logs.`);
       }
     } catch (err) {
       setInputError(err.message);
@@ -613,14 +847,6 @@ function App() {
     } finally {
       setBusy("");
     }
-  };
-
-  const toggleDataset = (ticker, selected) => {
-    setDatasets((current) => current.map((d) => (d.ticker === ticker ? { ...d, selected } : d)));
-  };
-
-  const selectAllReady = (on) => {
-    setDatasets((current) => current.map((d) => ({ ...d, selected: on ? d.ready : false })));
   };
 
   const updateCatalyst = (key, value) => {
@@ -638,434 +864,339 @@ function App() {
     setSettings((current) => ({ ...current, [key]: { ...current[key], enabled } }));
   };
 
-  const onActiveTickerChange = async (ticker) => {
-    if (!ticker) return;
-    setActiveTicker(ticker);
-    setTickerInput(ticker);
-    try {
-      const meta = await fetchDatasetMeta(ticker);
-      setDateLabels(meta.dates || []);
-      const safe = Math.max(95 + Math.round(horizon), meta.maxCutoff - 1);
-      setCutoffIndex(safe);
-      setMaxCutoff(meta.maxCutoff);
-      
-      // Auto-run test if model is trained
-      if (Object.keys(settings).length) {
-        await runStockTestAction(ticker, { mode: testMode, silent: true });
-      }
-    } catch (err) {
-      setInputError(err.message);
-    }
-  };
-
-  const testDateLabel = dateLabels[cutoffIndex] || stockResult?.date || "—";
-
-  const error = inputError;
-  const readyCount = datasets.filter((d) => d.ready).length;
-
   return (
-    <main className="app-shell">
-      <section className="workspace">
-        <aside className="control-rail" aria-label="Analysis controls">
-          <div className="brand-block">
-            <p className="eyebrow">stonk</p>
-            <h1>Research Desk</h1>
-            <p className="subtle">Real S&P 500 CSV data only. Train and backtest via the Python API.</p>
-          </div>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Box sx={{ minHeight: "100vh", bgcolor: "background.default", p: { xs: 1.5, md: 2.5 } }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "360px minmax(0, 1fr)" }, gap: 2.5, maxWidth: 1560, mx: "auto" }}>
+          <Paper variant="outlined" sx={{ p: 2.5, alignSelf: "start", position: { lg: "sticky" }, top: 20 }}>
+            <Stack spacing={2.5}>
+              <Box>
+                <Typography variant="overline" color="primary" fontWeight={900}>stonk</Typography>
+                <Typography variant="h4">Research Desk</Typography>
+                <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+                  <Chip size="small" color={backendOnline ? "success" : "error"} label={backendOnline ? "API connected" : "API offline"} />
+                  <Chip size="small" color={modelReady ? "primary" : "default"} label={modelReady ? "Model ready" : "No model"} />
+                </Stack>
+              </Box>
 
-          <div className={`status-pill ${backendOnline ? "" : "danger"}`}>
-            {backendOnline ? "API connected" : "API offline"}
-          </div>
+              <Tabs value={view} onChange={(_, value) => setView(value)} variant="fullWidth">
+                <Tab value="research" icon={<AutoGraphIcon />} iconPosition="start" label="Research" />
+                <Tab value="stock" icon={<SavedSearchIcon />} iconPosition="start" label="Stock" />
+              </Tabs>
 
-          <div className="view-tabs" role="tablist" aria-label="Model views">
-            <button type="button" className={view === "research" ? "selected" : ""} onClick={() => setView("research")}>
-              Research
-            </button>
-            <button type="button" className={view === "stock" ? "selected" : ""} onClick={() => setView("stock")}>
-              Stock Test
-            </button>
-          </div>
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                <TextField size="small" label="Horizon" type="number" value={horizon} onChange={(event) => setHorizon(Number(event.target.value))} inputProps={{ min: 1, max: 90 }} />
+                <TextField size="small" label="Signal" type="number" value={confidence} onChange={(event) => setConfidence(Number(event.target.value))} inputProps={{ min: 0.51, max: 0.9, step: 0.01 }} />
+                <TextField size="small" label="DTE" type="number" value={dte} onChange={(event) => setDte(Number(event.target.value))} inputProps={{ min: 1, max: 730 }} />
+                <TextField size="small" label="IV %" type="number" value={iv} onChange={(event) => setIv(Number(event.target.value))} inputProps={{ min: 1, max: 300 }} />
+                <TextField size="small" label="Cost %" type="number" value={tradeCost} onChange={(event) => setTradeCost(Number(event.target.value))} inputProps={{ min: 0, max: 20, step: 0.05 }} />
+                <TextField size="small" label="Train %" type="number" value={trainFraction} onChange={(event) => setTrainFraction(Number(event.target.value))} inputProps={{ min: 0.5, max: 0.9, step: 0.05 }} />
+              </Box>
 
-          <div className="control-grid">
-            <label className="control-group">
-              Horizon
-              <input type="number" min="1" max="90" value={horizon} onChange={(e) => setHorizon(Number(e.target.value))} />
-            </label>
-            <label className="control-group">
-              Signal
-              <input type="number" min="0.51" max="0.9" step="0.01" value={confidence} onChange={(e) => setConfidence(Number(e.target.value))} />
-            </label>
-          </div>
+              <FormControl size="small">
+                <InputLabel>Model engine</InputLabel>
+                <Select label="Model engine" value={modelType} onChange={(event) => setModelType(event.target.value)}>
+                  <MenuItem value="logistic">Logistic</MenuItem>
+                  <MenuItem value="xgboost">XGBoost</MenuItem>
+                  <MenuItem value="svm">SVM</MenuItem>
+                </Select>
+              </FormControl>
 
-          <div className="control-grid">
-            <label className="control-group">
-              DTE
-              <input type="number" min="1" max="730" value={dte} onChange={(e) => setDte(Number(e.target.value))} />
-            </label>
-            <label className="control-group">
-              IV %
-              <input type="number" min="1" max="300" step="1" value={iv} onChange={(e) => setIv(Number(e.target.value))} />
-            </label>
-          </div>
+              <SectionCard title="Universe" action={<Chip size="small" label={`${selectedTickers.length} selected`} />}>
+                <DatasetPicker datasets={datasets} onChange={setSelectedTickers} onSelectAll={selectAllReady} />
+              </SectionCard>
 
-          <div className="control-grid">
-            <label className="control-group">
-              Cost %
-              <input type="number" min="0" max="20" step="0.05" value={tradeCost} onChange={(e) => setTradeCost(Number(e.target.value))} />
-            </label>
-            <label className="control-group">
-              Train %
-              <input type="number" min="0.5" max="0.9" step="0.05" value={trainFraction} onChange={(e) => setTrainFraction(Number(e.target.value))} />
-            </label>
-          </div>
+              <SectionCard title="Catalysts">
+                <Stack spacing={1}>
+                  {Object.entries(catalysts).map(([key, value]) => (
+                    <Box key={key}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="center">
+                        <Typography variant="caption" fontWeight={750}>{titleize(key)}</Typography>
+                        <Typography variant="caption" color="text.secondary">{fmt(value, 2)}</Typography>
+                      </Stack>
+                      <Slider min={-1} max={1} step={0.05} value={value} onChange={(_, next) => updateCatalyst(key, next)} size="small" />
+                    </Box>
+                  ))}
+                </Stack>
+              </SectionCard>
 
-          <div className="control-grid">
-            <label className="control-group">
-              Model Engine
-              <select value={modelType} onChange={(e) => setModelType(e.target.value)}>
-                <option value="logistic">Logistic (Interpretable)</option>
-                <option value="xgboost">XGBoost (Short-term)</option>
-                <option value="svm">SVM (Options Gate)</option>
-              </select>
-            </label>
-          </div>
+              <Stack spacing={1}>
+                <Button variant="contained" startIcon={<DownloadIcon />} onClick={handleDownload} disabled={!!busy || !backendOnline}>
+                  {busy === "download" ? "Downloading" : "Download S&P 500"}
+                </Button>
+                <Button variant="outlined" startIcon={<ScienceIcon />} onClick={runTrain} disabled={!!busy || !backendOnline || !selectedTickers.length}>
+                  {busy === "train" ? "Training" : "Auto-train"}
+                </Button>
+                <Button variant="outlined" startIcon={<InsightsIcon />} onClick={runBacktest} disabled={!!busy || !backendOnline || !selectedTickers.length || !modelReady}>
+                  {busy === "backtest" ? "Running" : "Backtest"}
+                </Button>
+                <Button variant="outlined" startIcon={<CloudSyncIcon />} onClick={runLive} disabled={!!busy || !backendOnline || !selectedTickers.length || !modelReady}>
+                  {busy === "live" ? "Scanning" : "Live scan"}
+                </Button>
+                <Button variant="text" startIcon={<StorageIcon />} onClick={loadTrainedModel} disabled={!!busy || !backendOnline}>
+                  Load model
+                </Button>
+                <Button variant="text" startIcon={<RefreshIcon />} onClick={refreshUniverse} disabled={!!busy || !backendOnline}>
+                  Refresh universe
+                </Button>
+              </Stack>
+            </Stack>
+          </Paper>
 
-          <div className="factor-panel">
-            <div className="panel-heading">
-              <h2>S&P 500 universe</h2>
-              <span>{readyCount} ready</span>
-            </div>
-            <DatasetPicker datasets={datasets} onToggle={toggleDataset} onSelectAll={selectAllReady} />
-          </div>
+          <Stack spacing={2.5} sx={{ minWidth: 0 }}>
+            {!!busy && <LinearProgress />}
+            <Paper variant="outlined" sx={{ p: 2.5 }}>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }}>
+                <Box>
+                  <Typography variant="overline" color="primary" fontWeight={900}>
+                    {view === "research" ? "Autonomous backtesting" : "Ticker research"}
+                  </Typography>
+                  <Typography variant="h5">{view === "research" ? "Model research" : `${activeTicker || tickerInput || "Stock"} view`}</Typography>
+                </Box>
+                <Alert severity={error ? "error" : backendOnline ? "success" : "warning"} sx={{ maxWidth: 720 }}>
+                  {error || status}
+                </Alert>
+              </Stack>
+            </Paper>
 
-          <div className="factor-panel">
-            <div className="panel-heading">
-              <h2>Catalyst overrides</h2>
-            </div>
-            {Object.entries(catalysts).map(([key, value]) => (
-              <label key={key}>
-                <span>{key.replace(/([A-Z])/g, " $1")}</span>
-                <input type="range" min="-1" max="1" step="0.05" value={value} onChange={(e) => updateCatalyst(key, e.target.value)} />
-              </label>
-            ))}
-          </div>
-
-          <div className="action-row stacked">
-            <button
-              type="button"
-              className="primary"
-              onClick={handleDownload}
-              disabled={!!busy || !backendOnline}
-            >
-              <Download size={18} />
-              {busy === "download" ? "Downloading…" : "Download S&P 500 (10y)"}
-            </button>
-            <button
-              type="button"
-              onClick={runTrain}
-              disabled={!!busy || !backendOnline}
-            >
-              <FlaskConical size={18} />
-              {busy === "train" ? "Training…" : "Auto-train weights"}
-            </button>
-            <button
-              type="button"
-              onClick={loadTrainedModel}
-              disabled={!!busy || !backendOnline}
-            >
-              <Activity size={18} />
-              {busy === "load" ? "Loading…" : "Load global model"}
-            </button>
-            <button
-              type="button"
-              onClick={runLive}
-              disabled={!!busy || !backendOnline || !Object.keys(settings).length}
-            >
-              <SlidersHorizontal size={18} />
-              {busy === "live" ? "Scanning…" : "Live stock + options scan"}
-            </button>
-            <button
-              type="button"
-              onClick={runBacktest}
-              disabled={!!busy || !backendOnline}
-            >
-              <Activity size={18} />
-              {busy === "backtest" ? "Running…" : "Run portfolio backtest"}
-            </button>
-            <button
-              type="button"
-              onClick={refreshUniverse}
-              disabled={!!busy || !backendOnline}
-            >
-              <Database size={18} />
-              Refresh universe
-            </button>
-          </div>
-        </aside>
-
-        <section className="main-stage" aria-label="Prediction dashboard">
-          <header className="stage-header">
-            <div>
-              <p className="eyebrow">{view === "research" ? "Trained on real CSV history" : "Point-in-time stock test"}</p>
-              <h2>{view === "research" ? "Research Desk" : `${activeTicker || "—"} test`}</h2>
-            </div>
-            <div className={`status-pill ${error ? "danger" : ""}`}>{error || status}</div>
-          </header>
-
-          {view === "research" && (
-            <>
-              {!portfolio && !rankings.length && (
-                <p className="discipline-text">
-                  Download CSVs, select tickers, then <strong>Auto-train weights</strong> (all indicators optimized together),{" "}
-                  <strong>Run portfolio backtest</strong>, and <strong>Live stock + options scan</strong>.
-                </p>
-              )}
-
-              {portfolio && (
-                <section className="metric-grid" aria-label="Research metrics">
-                  <MetricCard accent="accent-green" label="Cross-stock accuracy" value={pct(portfolio.accuracy)} note={`${portfolio.testCount} test rows`} />
-                  <MetricCard accent="accent-blue" label="Signal hit rate" value={pct(portfolio.hitRate)} note={`${portfolio.signalCount} trades`} />
-                  <MetricCard accent="accent-gold" label="Expectancy" value={pct(portfolio.expectancy)} note="per signaled trade" />
-                  <MetricCard accent="accent-red" label="Max drawdown" value={pct(portfolio.maxDrawdown)} note="worst tested dataset" />
-                </section>
-              )}
-
-              {trainValidation && (
-                <section className="metric-grid" aria-label="Training validation">
-                  <MetricCard accent="accent-green" label="Val accuracy" value={pct(trainValidation.accuracy)} note={trainMethod} />
-                  <MetricCard accent="accent-blue" label="Val signal hit rate" value={pct(trainValidation.hitRate)} note={`${trainValidation.signalCount} signals`} />
-                  <MetricCard accent="accent-gold" label="Val Brier" value={fmt(trainValidation.brier, 4)} note="lower is better" />
-                  <MetricCard accent="accent-red" label="Train samples" value={String(trainSamples)} note="chronological split" />
-                </section>
-              )}
-
-              {liveSignals && (
-                <article className="detail-panel span-two">
-                  <div className="panel-heading">
-                    <h2>Live scan (stocks + options)</h2>
-                    <span>{liveSignals.count} tickers</span>
-                  </div>
-                  <LiveSignalsTable payload={liveSignals} />
-                </article>
-              )}
-
-              {rankings.length > 0 && (
-                <section className="detail-grid wide">
-                  <article className="detail-panel">
-                    <div className="panel-heading">
-                      <h2>Learned indicator weights</h2>
-                      <span>{trainSamples} samples · jointly optimized</span>
-                    </div>
-                    <RankingTable rankings={rankings} settings={settings} onToggle={updateToggle} onWeight={updateWeight} />
-                  </article>
-                  {portfolio && (
-                    <article className="detail-panel">
-                      <div className="panel-heading">
-                        <h2>Dataset results</h2>
-                        <span>walk-forward split</span>
-                      </div>
-                      <div className="dataset-results">
-                        {portfolio.results.map((item) => (
-                          <div key={item.ticker}>
-                            <strong>{item.ticker}</strong>
-                            <span>{item.coverage}</span>
-                            <small>
-                              Accuracy {pct(item.backtest.accuracy)} · Hit {pct(item.backtest.hitRate)} · Expectancy{" "}
-                              {pct(item.backtest.expectancy)}
-                            </small>
-                          </div>
-                        ))}
-                      </div>
-                    </article>
-                  )}
-                </section>
-              )}
-            </>
-          )}
-
-          {view === "stock" && (
-            <>
-              {providers && (
-                <p className="discipline-text">
-                  Live data: <strong>{providers.default_equity}</strong>
-                  {providers.massive?.configured ? " (Massive live)" : " (add MASSIVE_API_KEY in .env for real-time)"}
-                  {" · "}any symbol via yfinance fallback.
-                </p>
-              )}
-
-              <section className="stock-toolbar">
-                <label className="control-group">
-                  Ticker (any symbol)
-                  <input
-                    type="text"
-                    value={tickerInput}
-                    placeholder="e.g. AAPL, TSLA, SPY"
-                    onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
-                  />
-                </label>
-                <button
-                  type="button"
-                  disabled={!!busy || !backendOnline}
-                  onClick={() => loadTicker()}
-                >
-                  {busy === "fetch" ? "Loading…" : "Load / refresh"}
-                </button>
-                <label className="control-group">
-                  Or pick loaded
-                  <select value={activeTicker} onChange={(e) => onActiveTickerChange(e.target.value)}>
-                    <option value="">Select…</option>
-                    {datasets
-                      .filter((d) => d.ready)
-                      .map((d) => (
-                        <option key={d.ticker} value={d.ticker}>
-                          {d.ticker}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-              </section>
-
-              <section className="stock-toolbar">
-                <div className="view-tabs compact-tabs">
-                  <button type="button" className={testMode === "historical" ? "selected" : ""} onClick={() => setTestMode("historical")}>
-                    Historical test
-                  </button>
-                  <button type="button" className={testMode === "latest" ? "selected" : ""} onClick={() => setTestMode("latest")}>
-                    Latest (live)
-                  </button>
-                </div>
-                <label className="switch-line">
-                  <input type="checkbox" checked={refreshBeforeTest} onChange={(e) => setRefreshBeforeTest(e.target.checked)} />
-                  <span>Refresh data from live API before test</span>
-                </label>
-                {testMode === "historical" && (
-                  <label className="control-group">
-                    Test date: {testDateLabel}
-                    <input
-                      type="range"
-                      min={95 + Math.round(horizon)}
-                      max={maxCutoff}
-                      value={cutoffIndex}
-                      onChange={(e) => setCutoffIndex(Number(e.target.value))}
-                    />
-                  </label>
+            {view === "research" && (
+              <Stack spacing={2.5}>
+                {portfolio && (
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, gap: 2 }}>
+                    <MetricCard color="success" label="Accuracy" value={pct(portfolio.accuracy)} note={`${portfolio.testCount} test rows`} />
+                    <MetricCard color="secondary" label="Hit rate" value={pct(portfolio.hitRate)} note={`${portfolio.signalCount} trades`} />
+                    <MetricCard color="warning" label="Expectancy" value={pct(portfolio.expectancy)} note="Per signal" />
+                    <MetricCard color="error" label="Max drawdown" value={pct(portfolio.maxDrawdown)} note="Worst dataset" />
+                  </Box>
                 )}
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={!(activeTicker || tickerInput) || !!busy || !Object.keys(settings).length || !backendOnline}
-                  onClick={() => runStockTestAction(activeTicker || tickerInput, { mode: testMode, cutoff: cutoffIndex })}
-                >
-                  {busy === "stock" ? "Testing…" : testMode === "latest" ? "Run latest signal" : "Run historical test"}
-                </button>
 
-              </section>
+                {trainValidation && (
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, gap: 2 }}>
+                    <MetricCard color="success" label="Val accuracy" value={pct(trainValidation.accuracy)} note={trainMethod} />
+                    <MetricCard color="secondary" label="Val hit rate" value={pct(trainValidation.hitRate)} note={`${trainValidation.signalCount} signals`} />
+                    <MetricCard color="warning" label="Val Brier" value={fmt(trainValidation.brier, 4)} note="Lower is better" />
+                    <MetricCard color="primary" label="Samples" value={String(trainSamples)} note="Chronological split" />
+                  </Box>
+                )}
 
-              {stockResult && (
-                <>
-                  {stockResult.quote && (
-                    <section className="metric-grid" aria-label="Live quote">
-                      <MetricCard
-                        accent="accent-blue"
-                        label={`Live quote (${stockResult.quote.provider})`}
-                        value={`$${fmt(stockResult.quote.price, 2)}`}
-                        note={`As of ${stockResult.quote.asOf}${stockResult.quote.delayed ? " · delayed" : ""}`}
-                      />
-                    </section>
-                  )}
+                {liveSignals && (
+                  <SectionCard title="Live stock and options scan" action={<Chip label={`${liveSignals.count} tickers`} />}>
+                    <LiveSignalsTable payload={liveSignals} />
+                  </SectionCard>
+                )}
 
-                  <section className="metric-grid" aria-label="Stock test metrics">
-                    <MetricCard accent="accent-green" label="Predicted direction" value={stockResult.bias} note={`${pct(stockResult.probabilityUp)} probability up`} />
-                    <MetricCard accent="accent-blue" label="Predicted move" value={pct(stockResult.predictedReturn)} note={`Expected ${pct(stockResult.expectedMove)}`} />
-                    <MetricCard
-                      accent="accent-gold"
-                      label={stockResult.mode === "latest" ? "Outcome" : "Actual move"}
-                      value={stockResult.realizedReturn == null ? "Pending" : pct(stockResult.realizedReturn)}
-                      note={
-                        stockResult.mode === "latest"
-                          ? `Signal date ${stockResult.date}`
-                          : stockResult.directionCorrect
-                            ? "Direction passed"
-                            : "Direction missed"
-                      }
+                {rankings.length > 0 && (
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1.2fr 0.8fr" }, gap: 2.5 }}>
+                    <SectionCard title="Learned indicator weights" action={<Chip label={`${trainSamples} samples`} />}>
+                      <RankingTable rankings={rankings} settings={settings} onToggle={updateToggle} onWeight={updateWeight} />
+                    </SectionCard>
+                    {portfolio && (
+                      <SectionCard title="Dataset results" action={<Chip label="Walk-forward" />}>
+                        <Stack spacing={1.25}>
+                          {portfolio.results.map((item) => (
+                            <Paper variant="outlined" sx={{ p: 1.5 }} key={item.ticker}>
+                              <Stack direction="row" alignItems="center" justifyContent="space-between">
+                                <Typography fontWeight={850}>{item.ticker}</Typography>
+                                <Chip size="small" label={item.coverage} />
+                              </Stack>
+                              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                                Accuracy {pct(item.backtest.accuracy)} · Hit {pct(item.backtest.hitRate)} · Expectancy {pct(item.backtest.expectancy)}
+                              </Typography>
+                            </Paper>
+                          ))}
+                        </Stack>
+                      </SectionCard>
+                    )}
+                  </Box>
+                )}
+
+                {!rankings.length && !portfolio && (
+                  <Alert severity="info">Select ready tickers, train a model, then run a backtest.</Alert>
+                )}
+              </Stack>
+            )}
+
+            {view === "stock" && (
+              <Stack spacing={2.5}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "end" }}>
+                    <Autocomplete
+                      freeSolo
+                      fullWidth
+                      options={readyTickers}
+                      value={tickerInput}
+                      inputValue={tickerInput}
+                      onInputChange={(_, value) => setTickerInput(value.toUpperCase())}
+                      onChange={(_, value) => {
+                        const symbol = String(value || "").toUpperCase();
+                        setTickerInput(symbol);
+                        if (readyTickers.includes(symbol)) onActiveTickerChange(symbol);
+                      }}
+                      renderInput={(params) => <TextField {...params} label="Ticker" placeholder="AAPL, TSLA, SPY" />}
                     />
-                    <MetricCard accent="accent-red" label="Options edge" value={pct(stockResult.movementEdge)} note={`Implied ${pct(stockResult.impliedMove)}`} />
-                  </section>
+                    <Button variant="contained" startIcon={<SavedSearchIcon />} onClick={() => loadTicker()} disabled={!!busy || !backendOnline}>
+                      {busy === "fetch" ? "Loading" : "Load"}
+                    </Button>
+                    <FormControl sx={{ minWidth: 190 }}>
+                      <InputLabel>Loaded stock</InputLabel>
+                      <Select label="Loaded stock" value={activeTicker} onChange={(event) => onActiveTickerChange(event.target.value)}>
+                        <MenuItem value="">Select</MenuItem>
+                        {readyTickers.map((ticker) => (
+                          <MenuItem key={ticker} value={ticker}>{ticker}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Stack>
+                </Paper>
 
-                  <section className="chart-band">
-                    <div className="chart-panel price-panel">
-                      <div className="panel-heading">
-                        <h2>Historical window</h2>
-                        <TimeRangeSelector active={timeRange} onChange={setTimeRange} />
-                      </div>
-                      <PriceChart rows={stockResult.series || []} range={timeRange} />
-                    </div>
-                    <div className="chart-panel">
-                      <div className="panel-heading">
-                        <h2>Point signal</h2>
-                        <span>Raw {fmt(stockResult.rawScore, 2)}</span>
-                      </div>
-                      <SignalGauge probability={stockResult.probabilityUp} />
-                    </div>
-                  </section>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "center" }}>
+                    <ToggleButtonGroup exclusive value={testMode} onChange={(_, value) => value && setTestMode(value)} size="small">
+                      <ToggleButton value="historical"><ShowChartIcon sx={{ mr: 1 }} /> Historical</ToggleButton>
+                      <ToggleButton value="latest"><CloudSyncIcon sx={{ mr: 1 }} /> Latest</ToggleButton>
+                    </ToggleButtonGroup>
+                    <FormControlLabel
+                      control={<Switch checked={refreshBeforeTest} onChange={(event) => setRefreshBeforeTest(event.target.checked)} />}
+                      label="Refresh before test"
+                    />
+                    {testMode === "historical" && (
+                      <Box sx={{ flex: 1, minWidth: 220 }}>
+                        <Typography variant="caption" fontWeight={750}>Test date: {testDateLabel}</Typography>
+                        <Slider min={sliderMin} max={maxCutoff} value={Math.min(cutoffIndex, maxCutoff)} onChange={(_, value) => setCutoffIndex(value)} />
+                      </Box>
+                    )}
+                    <Tooltip title={!modelReady ? "Train or load a model first" : ""}>
+                      <span>
+                        <Button
+                          variant="contained"
+                          startIcon={<ScienceIcon />}
+                          disabled={!(activeTicker || tickerInput) || !!busy || !modelReady || !backendOnline}
+                          onClick={() => runStockTestAction(activeTicker || tickerInput, { mode: testMode, cutoff: cutoffIndex })}
+                        >
+                          {busy === "stock" ? "Testing" : "Run test"}
+                        </Button>
+                      </span>
+                    </Tooltip>
+                  </Stack>
+                </Paper>
 
-                  <section className="detail-grid wide">
-                    <article className="detail-panel">
-                      <div className="panel-heading">
-                        <h2>Pre-date backtest</h2>
-                        <span>{stockResult.backtest.testCount} rows before test</span>
-                      </div>
-                      <div className="stats-list compact">
-                        <div><span>Accuracy</span><strong>{pct(stockResult.backtest.accuracy)}</strong></div>
-                        <div><span>Signal hit rate</span><strong>{pct(stockResult.backtest.hitRate)}</strong></div>
-                        <div><span>Signals</span><strong>{stockResult.backtest.signalCount}</strong></div>
-                        <div><span>Expectancy</span><strong>{pct(stockResult.backtest.expectancy)}</strong></div>
-                        <div><span>Profit factor</span><strong>{fmt(stockResult.backtest.profitFactor, 2)}</strong></div>
-                        <div><span>Max drawdown</span><strong>{pct(stockResult.backtest.maxDrawdown)}</strong></div>
-                      </div>
-                      <EquityCurve trades={stockResult.backtest.trades} />
-                    </article>
-                    <article className="detail-panel">
-                      <div className="panel-heading">
-                        <h2>Option contracts</h2>
-                        <span>{stockResult.options?.provider || "chain"}</span>
-                      </div>
-                      <OptionsContracts options={stockResult.options} />
-                    </article>
+                {providers && (
+                  <Alert severity="info" icon={<AccountBalanceIcon />}>
+                    Data provider: {providers.default_equity}
+                    {providers.massive?.configured ? " with Massive configured" : " with yfinance fallback"}
+                  </Alert>
+                )}
 
-                    <article className="detail-panel">
-                      <div className="panel-heading">
-                        <h2>Decision gate</h2>
-                        <span>{stockResult.directionCorrect == null ? "live" : stockResult.directionCorrect ? "passed" : "failed"}</span>
-                      </div>
-                      <p className="discipline-text">
-                        {stockResult.mode === "latest" ? (
-                          <>
-                            As of {stockResult.date} (close {fmt(stockResult.close, 2)}), the trained model signals{" "}
-                            {stockResult.bias.toLowerCase()} with {pct(stockResult.probabilityUp)} probability up over the next{" "}
-                            {horizon} sessions.
-                          </>
-                        ) : (
-                          <>
-                            At {stockResult.date}, the model predicted {stockResult.bias.toLowerCase()} with{" "}
-                            {pct(stockResult.probabilityUp)} probability up. Actual move by {stockResult.futureDate}:{" "}
-                            {pct(stockResult.realizedReturn)}.
-                          </>
-                        )}
-                      </p>
-                      <div className="discipline-badge">
-                        <BarChart3 size={18} /> All metrics from downloaded CSV + trained weights.
-                      </div>
-                    </article>
-                  </section>
-                </>
-              )}
-            </>
-          )}
-        </section>
-      </section>
-    </main>
+                {(activeTicker || tickerInput) && (
+                  <Paper variant="outlined" sx={{ p: 1.25 }}>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                      <Button size="small" href="#research-snapshot">Snapshot</Button>
+                      <Button size="small" href="#model-signal">Signal</Button>
+                      <Button size="small" href="#price-history">History</Button>
+                      <Button size="small" href="#backtest">Backtest</Button>
+                      <Button size="small" href="#options">Options</Button>
+                      <Button size="small" href="#insiders">Insiders</Button>
+                    </Stack>
+                  </Paper>
+                )}
+
+                {(activeTicker || tickerInput || researchSummary || researchError) && (
+                  <SectionCard
+                    id="research-snapshot"
+                    title="Research snapshot"
+                    action={<Button size="small" onClick={() => loadResearchSummary(activeTicker || tickerInput)}>Refresh</Button>}
+                  >
+                    <ResearchSummaryPanel summary={researchSummary} error={researchError} />
+                  </SectionCard>
+                )}
+
+                {stockResult && (
+                  <Stack spacing={2.5}>
+                    {stockResult.quote && (
+                      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, gap: 2 }}>
+                        <MetricCard color="secondary" label={`Quote (${stockResult.quote.provider})`} value={`$${fmt(stockResult.quote.price)}`} note={stockResult.quote.asOf} />
+                        <MetricCard color="primary" label="Open" value={`$${fmt(stockResult.quote.open)}`} note="Session open" />
+                        <MetricCard color="primary" label="High / low" value={`$${fmt(stockResult.quote.high)} / $${fmt(stockResult.quote.low)}`} note="Session range" />
+                        <MetricCard color="primary" label="Volume" value={fmt(stockResult.quote.volume, 0)} note={stockResult.quote.delayed ? "Delayed" : "Live"} />
+                      </Box>
+                    )}
+
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, gap: 2 }}>
+                      <MetricCard color="success" label="Direction" value={stockResult.bias} note={`${pct(stockResult.probabilityUp)} probability up`} />
+                      <MetricCard color="secondary" label="Predicted move" value={pct(stockResult.predictedReturn)} note={`Expected ${pct(stockResult.expectedMove)}`} />
+                      <MetricCard
+                        color="warning"
+                        label={stockResult.mode === "latest" ? "Outcome" : "Actual move"}
+                        value={stockResult.realizedReturn == null ? "Pending" : pct(stockResult.realizedReturn)}
+                        note={stockResult.mode === "latest" ? stockResult.date : stockResult.futureDate}
+                      />
+                      <MetricCard color="error" label="Options edge" value={pct(stockResult.movementEdge)} note={`Implied ${pct(stockResult.impliedMove)}`} />
+                    </Box>
+
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1.4fr 0.8fr" }, gap: 2.5 }}>
+                      <SectionCard
+                        id="price-history"
+                        title="Price history"
+                        action={
+                          <ToggleButtonGroup size="small" exclusive value={timeRange} onChange={(_, value) => value && setTimeRange(value)}>
+                            {["5D", "1M", "3M", "6M", "1Y", "5Y", "ALL"].map((range) => (
+                              <ToggleButton key={range} value={range}>{range}</ToggleButton>
+                            ))}
+                          </ToggleButtonGroup>
+                        }
+                      >
+                        <PriceChart rows={stockResult.series || []} range={timeRange} />
+                      </SectionCard>
+                      <SectionCard id="model-signal" title="Decision gate" action={<Chip color={stockResult.directionCorrect ? "success" : "default"} label={stockResult.directionCorrect == null ? "Live" : stockResult.directionCorrect ? "Passed" : "Missed"} />}>
+                        <Stack spacing={2}>
+                          <Alert severity={stockResult.probabilityUp >= confidence ? "success" : stockResult.probabilityUp <= 1 - confidence ? "error" : "warning"}>
+                            {stockResult.bias} at {pct(stockResult.probabilityUp)} probability up over {horizon} sessions.
+                          </Alert>
+                          <Divider />
+                          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                            <MetricMini label="Raw score" value={fmt(stockResult.rawScore, 2)} />
+                            <MetricMini label="Close" value={`$${fmt(stockResult.close)}`} />
+                            <MetricMini label="Date" value={stockResult.date} />
+                            <MetricMini label="Future" value={stockResult.futureDate || "Pending"} />
+                          </Box>
+                        </Stack>
+                      </SectionCard>
+                    </Box>
+
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 2.5 }}>
+                      <SectionCard id="backtest" title="Pre-date backtest" action={<Chip label={`${stockResult.backtest?.testCount || 0} rows`} />}>
+                        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 1.5 }}>
+                          <MetricMini label="Accuracy" value={pct(stockResult.backtest?.accuracy)} />
+                          <MetricMini label="Hit rate" value={pct(stockResult.backtest?.hitRate)} />
+                          <MetricMini label="Signals" value={String(stockResult.backtest?.signalCount || 0)} />
+                          <MetricMini label="Expectancy" value={pct(stockResult.backtest?.expectancy)} />
+                          <MetricMini label="Profit factor" value={fmt(stockResult.backtest?.profitFactor)} />
+                          <MetricMini label="Max drawdown" value={pct(stockResult.backtest?.maxDrawdown)} />
+                        </Box>
+                        <EquityCurve trades={stockResult.backtest?.trades} />
+                      </SectionCard>
+                      <SectionCard id="options" title="Option contracts" action={<Chip label={stockResult.options?.provider || "Chain"} />}>
+                        <OptionsContracts options={stockResult.options} />
+                      </SectionCard>
+                    </Box>
+
+                    <SectionCard id="insiders" title="Insider activity" action={<Button size="small" onClick={() => loadInsiders(activeTicker || tickerInput)}>Refresh</Button>}>
+                      <InsiderPanel activity={insiderActivity} error={insiderError} />
+                    </SectionCard>
+                  </Stack>
+                )}
+              </Stack>
+            )}
+          </Stack>
+        </Box>
+      </Box>
+    </ThemeProvider>
   );
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+const rootElement = document.getElementById("root");
+if (!rootElement.__stonkRoot) {
+  rootElement.__stonkRoot = createRoot(rootElement);
+}
+rootElement.__stonkRoot.render(<App />);

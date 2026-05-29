@@ -165,15 +165,17 @@ def train_autonomous_weights(
         val_metrics["accuracy"] = correct / len(validation)
 
     ranked = rank_indicators(datasets, horizon, catalysts)
-    
+    enabled_indicators = sum(1 for setting in settings.values() if setting.get("enabled", True))
+
     # ... rest of the function remains similar but adapted for wrapper ...
     return {
         "settings": settings,
         "rankings": ranked["rankings"],
         "totalRows": len(samples),
+        "enabledIndicators": enabled_indicators,
         "trainRows": len(train),
         "validationRows": len(validation),
-        "method": f"autonomous-{model_type}",
+        "method": "autonomous" if model_type == "logistic" else f"autonomous-{model_type}",
         "validation": val_metrics,
         "model_type": model_type,
         "scalerMeans": scaler.means,

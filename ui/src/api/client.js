@@ -134,6 +134,10 @@ export function fetchStockQuote(ticker) {
   return request(`/stock/${encodeURIComponent(ticker)}/quote`);
 }
 
+export function fetchStockResearch(ticker) {
+  return request(`/stock/${encodeURIComponent(ticker)}/research`);
+}
+
 export function runStockTest({
   ticker,
   mode = "historical",
@@ -181,4 +185,8 @@ export function fetchDatasetMeta(ticker) {
 
 export function fetchTrainedModel() {
   return request("/research/model");
+}
+
+export function fetchInsiderActivity(ticker) {
+  return request(`/stock/${encodeURIComponent(ticker)}/insiders`);
 }
