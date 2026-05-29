@@ -29,31 +29,110 @@ function fmt(value, digits = 2) {
   return value.toFixed(digits);
 }
 
-function Sparkline({ rows }) {
+function PriceChart({ rows, range = "1Y" }) {
   const width = 900;
-  const height = 280;
-  const pad = 32;
-  const data = rows.slice(-180);
-  const closes = data.map((r) => r.close);
+  const height = 320;
+  const pad = 36;
+
+  const sliceData = React.useMemo(() => {
+    if (!rows || rows.length === 0) return [];
+    const countMap = {
+      "1D": 2,
+      "5D": 5,
+      "1M": 21,
+      "3M": 63,
+      "6M": 126,
+      "1Y": 252,
+      "5Y": 252 * 5,
+      "ALL": rows.length,
+    };
+    const count = countMap[range] || 252;
+    return rows.slice(-count);
+  }, [rows, range]);
+
+  if (sliceData.length < 2) {
+    return (
+      <div className="chart-placeholder">
+        {sliceData.length === 1 ? `Last close: $${sliceData[0].close.toFixed(2)}` : "No data to chart."}
+      </div>
+    );
+  }
+
+  const closes = sliceData.map((r) => r.close);
   const min = Math.min(...closes);
   const max = Math.max(...closes);
-  const points = data
+  const range_val = max - min || 0.01;
+
+  const points = sliceData
     .map((row, index) => {
-      const x = pad + (index / Math.max(1, data.length - 1)) * (width - pad * 2);
-      const y = height - pad - ((row.close - min) / Math.max(0.0001, max - min)) * (height - pad * 2);
+      const x = pad + (index / Math.max(1, sliceData.length - 1)) * (width - pad * 2);
+      const y = height - pad - ((row.close - min) / range_val) * (height - pad * 2);
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(" ");
+
+  // Signal horizontal lines if available (last point)
+  const lastRow = sliceData[sliceData.length - 1];
+
   return (
-    <svg className="chart-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Price path chart">
-      {[0, 1, 2, 3].map((line) => {
-        const y = pad + ((height - pad * 2) / 3) * line;
-        return <line key={line} x1={pad} x2={width - pad} y1={y} y2={y} className="grid-line" />;
-      })}
-      <polyline points={points} fill="none" className="price-line" />
-      <text x={pad} y={22} className="chart-label">{max.toFixed(2)}</text>
-      <text x={pad} y={height - 9} className="chart-label">{min.toFixed(2)}</text>
-    </svg>
+    <div className="price-chart-container">
+      <svg className="chart-svg enhanced" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Price chart">
+        <defs>
+          <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="var(--green)" stopOpacity="0.1" />
+            <stop offset="100%" stopColor="var(--green)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {[0, 1, 2, 3].map((line) => {
+          const y = pad + ((height - pad * 2) / 3) * line;
+          return <line key={line} x1={pad} x2={width - pad} y1={y} y2={y} className="grid-line" strokeDasharray="4 4" />;
+        })}
+        <polyline
+          points={`${pad},${height - pad} ${points} ${width - pad},${height - pad}`}
+          fill="url(#chartGradient)"
+          stroke="none"
+        />
+        <polyline points={points} fill="none" className="price-line" strokeWidth="2.5" />
+        
+        {/* Current price indicator */}
+        <line 
+          x1={pad} 
+          x2={width - pad} 
+          y1={height - pad - ((lastRow.close - min) / range_val) * (height - pad * 2)} 
+          y2={height - pad - ((lastRow.close - min) / range_val) * (height - pad * 2)} 
+          className="current-price-line" 
+          strokeDasharray="2 2"
+        />
+
+        <text x={pad} y={24} className="chart-label highlight">${max.toFixed(2)}</text>
+        <text x={pad} y={height - 12} className="chart-label">${min.toFixed(2)}</text>
+        <text x={width - pad} y={height - pad - ((lastRow.close - min) / range_val) * (height - pad * 2) - 4} className="chart-label current" textAnchor="end">
+          NOW: ${lastRow.close.toFixed(2)}
+        </text>
+        
+        {/* Date labels */}
+        <text x={pad} y={height - 4} className="chart-label date">{sliceData[0].date}</text>
+        <text x={width - pad} y={height - 4} className="chart-label date" textAnchor="end">{sliceData[sliceData.length - 1].date}</text>
+      </svg>
+    </div>
+  );
+}
+
+function TimeRangeSelector({ active, onChange }) {
+  const ranges = ["5D", "1M", "3M", "6M", "1Y", "5Y", "ALL"];
+  return (
+    <div className="time-range-tabs">
+      {ranges.map((r) => (
+        <button
+          key={r}
+          type="button"
+          className={active === r ? "selected" : ""}
+          onClick={() => onChange(r)}
+        >
+          {r}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -276,6 +355,7 @@ function App() {
   const [dateLabels, setDateLabels] = React.useState([]);
   const [tickerInput, setTickerInput] = React.useState("");
   const [testMode, setTestMode] = React.useState("historical");
+  const [timeRange, setTimeRange] = React.useState("1Y");
   const [refreshBeforeTest, setRefreshBeforeTest] = React.useState(true);
   const [providers, setProviders] = React.useState(null);
   const [catalysts, setCatalysts] = React.useState(() => defaultCatalysts());
@@ -310,6 +390,21 @@ function App() {
         if (meta.defaultCatalysts) setCatalysts(meta.defaultCatalysts);
         setProviders(await fetchProviders());
         await refreshUniverse();
+        
+        // Auto-load global model if it exists
+        try {
+          const trained = await fetchTrainedModel();
+          if (trained && trained.settings) {
+            setSettings(trained.settings);
+            setRankings(trained.rankings || []);
+            setTrainSamples(trained.totalRows || 0);
+            setTrainValidation(trained.validation || null);
+            setTrainMethod(trained.method || "autonomous");
+            setStatus(`Loaded global model (${trained.totalRows} samples)`);
+          }
+        } catch (e) {
+          // No global model yet, that's fine
+        }
       } catch (err) {
         setBackendOnline(false);
         setInputError(err.message);
@@ -384,9 +479,9 @@ function App() {
     }
   };
 
-  const runStockTestAction = async (ticker, { cutoff, mode } = {}) => {
+  const runStockTestAction = async (ticker, { cutoff, mode, silent = false } = {}) => {
     if (!ticker || !Object.keys(settings).length) {
-      setInputError("Train the model on Research first.");
+      if (!silent) setInputError("Train the model on Research first.");
       return;
     }
     const useMode = mode || testMode;
@@ -419,7 +514,7 @@ function App() {
           : `Historical test for ${ticker} at ${result.date}`,
       );
     } catch (err) {
-      setInputError(err.message);
+      if (!silent) setInputError(err.message);
     } finally {
       setBusy("");
     }
@@ -441,6 +536,11 @@ function App() {
       setMaxCutoff(meta.maxCutoff);
       await refreshUniverse();
       setStatus(`Loaded ${ticker} via ${fetched.provider} (${fetched.start} → ${fetched.end})`);
+      
+      // Auto-run test if model is trained
+      if (Object.keys(settings).length) {
+        await runStockTestAction(ticker, { mode: testMode, silent: true });
+      }
     } catch (err) {
       setInputError(err.message);
     } finally {
@@ -539,6 +639,7 @@ function App() {
   };
 
   const onActiveTickerChange = async (ticker) => {
+    if (!ticker) return;
     setActiveTicker(ticker);
     setTickerInput(ticker);
     try {
@@ -547,6 +648,11 @@ function App() {
       const safe = Math.max(95 + Math.round(horizon), meta.maxCutoff - 1);
       setCutoffIndex(safe);
       setMaxCutoff(meta.maxCutoff);
+      
+      // Auto-run test if model is trained
+      if (Object.keys(settings).length) {
+        await runStockTestAction(ticker, { mode: testMode, silent: true });
+      }
     } catch (err) {
       setInputError(err.message);
     }
@@ -645,27 +751,52 @@ function App() {
           </div>
 
           <div className="action-row stacked">
-            <button type="button" className="primary" onClick={handleDownload} disabled={!!busy || !backendOnline}>
+            <button
+              type="button"
+              className="primary"
+              onClick={handleDownload}
+              disabled={!!busy || !backendOnline}
+            >
               <Download size={18} />
               {busy === "download" ? "Downloading…" : "Download S&P 500 (10y)"}
             </button>
-            <button type="button" onClick={runTrain} disabled={!!busy || !backendOnline}>
+            <button
+              type="button"
+              onClick={runTrain}
+              disabled={!!busy || !backendOnline}
+            >
               <FlaskConical size={18} />
               {busy === "train" ? "Training…" : "Auto-train weights"}
             </button>
-            <button type="button" onClick={loadTrainedModel} disabled={!!busy || !backendOnline}>
+            <button
+              type="button"
+              onClick={loadTrainedModel}
+              disabled={!!busy || !backendOnline}
+            >
               <Activity size={18} />
               {busy === "load" ? "Loading…" : "Load global model"}
             </button>
-            <button type="button" onClick={runLive} disabled={!!busy || !backendOnline || !Object.keys(settings).length}>
+            <button
+              type="button"
+              onClick={runLive}
+              disabled={!!busy || !backendOnline || !Object.keys(settings).length}
+            >
               <SlidersHorizontal size={18} />
               {busy === "live" ? "Scanning…" : "Live stock + options scan"}
             </button>
-            <button type="button" onClick={runBacktest} disabled={!!busy || !backendOnline}>
+            <button
+              type="button"
+              onClick={runBacktest}
+              disabled={!!busy || !backendOnline}
+            >
               <Activity size={18} />
               {busy === "backtest" ? "Running…" : "Run portfolio backtest"}
             </button>
-            <button type="button" onClick={refreshUniverse} disabled={!!busy || !backendOnline}>
+            <button
+              type="button"
+              onClick={refreshUniverse}
+              disabled={!!busy || !backendOnline}
+            >
               <Database size={18} />
               Refresh universe
             </button>
@@ -772,7 +903,11 @@ function App() {
                     onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
                   />
                 </label>
-                <button type="button" disabled={!!busy || !backendOnline} onClick={() => loadTicker()}>
+                <button
+                  type="button"
+                  disabled={!!busy || !backendOnline}
+                  onClick={() => loadTicker()}
+                >
                   {busy === "fetch" ? "Loading…" : "Load / refresh"}
                 </button>
                 <label className="control-group">
@@ -818,11 +953,12 @@ function App() {
                 <button
                   type="button"
                   className="primary"
-                  disabled={!activeTicker || !!busy || !Object.keys(settings).length}
-                  onClick={() => runStockTestAction(activeTicker, { mode: testMode, cutoff: cutoffIndex })}
+                  disabled={!(activeTicker || tickerInput) || !!busy || !Object.keys(settings).length || !backendOnline}
+                  onClick={() => runStockTestAction(activeTicker || tickerInput, { mode: testMode, cutoff: cutoffIndex })}
                 >
                   {busy === "stock" ? "Testing…" : testMode === "latest" ? "Run latest signal" : "Run historical test"}
                 </button>
+
               </section>
 
               {stockResult && (
@@ -860,9 +996,9 @@ function App() {
                     <div className="chart-panel price-panel">
                       <div className="panel-heading">
                         <h2>Historical window</h2>
-                        <span>{stockResult.coverage}</span>
+                        <TimeRangeSelector active={timeRange} onChange={setTimeRange} />
                       </div>
-                      <Sparkline rows={stockResult.series || []} />
+                      <PriceChart rows={stockResult.series || []} range={timeRange} />
                     </div>
                     <div className="chart-panel">
                       <div className="panel-heading">

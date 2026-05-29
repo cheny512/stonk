@@ -229,7 +229,13 @@ button {
   gap: 8px;
 }
 
-button:hover {
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
+button:hover:not(:disabled) {
   background: #e4e9df;
 }
 
@@ -239,7 +245,12 @@ button.primary {
   color: #fff;
 }
 
-button.primary:hover {
+button.primary:disabled {
+  background: #9ab4a8;
+  border-color: #9ab4a8;
+}
+
+button.primary:hover:not(:disabled) {
   background: #177a52;
 }
 
@@ -712,6 +723,70 @@ button.primary:hover {
 .date-readout span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.price-chart-container {
+  width: 100%;
+}
+
+.time-range-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.time-range-tabs button {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 4px;
+  background: var(--panel-soft);
+  color: var(--muted);
+}
+
+.time-range-tabs button.selected {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+}
+
+.chart-svg.enhanced {
+  background: #fff;
+}
+
+.chart-label.highlight {
+  fill: var(--muted);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.chart-label.current {
+  fill: var(--blue);
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.chart-label.date {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.current-price-line {
+  stroke: var(--blue);
+  stroke-width: 1;
+  opacity: 0.5;
+}
+
+.chart-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 320px;
+  color: var(--muted);
+  font-style: italic;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  margin-top: 14px;
 }
 
 .compact-gauge {

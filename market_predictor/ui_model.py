@@ -470,7 +470,7 @@ def latest_signal_test(
         "backtest": pre_backtest,
         "coverage": coverage_label(history),
         "cutoffIndex": cutoff,
-        "series": rows_to_dicts(history[-200:]),
+        "series": rows_to_dicts(history[-1500:]),
         "maxCutoff": len(rows) - horizon - 1,
         "rowCount": len(rows),
     }

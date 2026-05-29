@@ -1,81 +1,347 @@
 {
   "tickers": {
     "A": {
-      "end": "2026-05-26",
+      "end": "2026-05-28",
       "error": null,
       "path": "equity/sp500/A.csv",
-      "rows": 2532,
-      "start": "2016-04-29"
+      "rows": 2533,
+      "start": "2016-05-02"
     },
     "AAPL": {
-      "end": "2026-05-26",
+      "end": "2026-05-28",
       "error": null,
       "path": "equity/sp500/AAPL.csv",
-      "rows": 2532,
-      "start": "2016-04-29"
+      "rows": 2533,
+      "start": "2016-05-02"
     },
     "ABBV": {
-      "end": "2026-05-26",
+      "end": "2026-05-28",
       "error": null,
       "path": "equity/sp500/ABBV.csv",
-      "rows": 500,
-      "start": "2024-05-28"
+      "rows": 501,
+      "start": "2024-05-29"
+    },
+    "ABNB": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/ABNB.csv",
+      "rows": 1371,
+      "start": "2020-12-10"
     },
     "ABT": {
-      "end": "2026-05-26",
+      "end": "2026-05-28",
       "error": null,
       "path": "equity/sp500/ABT.csv",
-      "rows": 500,
-      "start": "2024-05-28"
+      "rows": 501,
+      "start": "2024-05-29"
+    },
+    "ACGL": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/ACGL.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
     },
     "ACN": {
-      "end": "2026-05-26",
+      "end": "2026-05-28",
       "error": null,
       "path": "equity/sp500/ACN.csv",
-      "rows": 500,
-      "start": "2024-05-28"
+      "rows": 501,
+      "start": "2024-05-29"
     },
     "ADBE": {
-      "end": "2026-05-26",
+      "end": "2026-05-28",
       "error": null,
       "path": "equity/sp500/ADBE.csv",
-      "rows": 2532,
-      "start": "2016-04-29"
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "ADI": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/ADI.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "ADM": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/ADM.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AEE": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AEE.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AEP": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AEP.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
     },
     "AES": {
-      "end": "2026-05-26",
+      "end": "2026-05-28",
       "error": null,
       "path": "equity/sp500/AES.csv",
-      "rows": 2532,
-      "start": "2016-04-29"
+      "rows": 2533,
+      "start": "2016-05-02"
     },
     "AFL": {
-      "end": "2026-05-26",
+      "end": "2026-05-28",
       "error": null,
       "path": "equity/sp500/AFL.csv",
-      "rows": 2532,
-      "start": "2016-04-29"
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AIG": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AIG.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AIZ": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AIZ.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AJG": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AJG.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AKAM": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AKAM.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "ALB": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/ALB.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "ALGN": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/ALGN.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "ALL": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/ALL.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "ALLE": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/ALLE.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AMAT": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AMAT.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AMCR": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AMCR.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
     },
     "AMD": {
-      "end": "2026-05-26",
+      "end": "2026-05-28",
       "error": null,
       "path": "equity/sp500/AMD.csv",
-      "rows": 2532,
-      "start": "2016-04-29"
+      "rows": 501,
+      "start": "2024-05-29"
+    },
+    "AME": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AME.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AMGN": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AMGN.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AMP": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AMP.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AMT": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AMT.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AMZN": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AMZN.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "ANET": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/ANET.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AON": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AON.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
     },
     "AOS": {
-      "end": "2026-05-26",
+      "end": "2026-05-28",
       "error": null,
       "path": "equity/sp500/AOS.csv",
-      "rows": 500,
-      "start": "2024-05-28"
+      "rows": 501,
+      "start": "2024-05-29"
+    },
+    "APA": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/APA.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "APD": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/APD.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "APH": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/APH.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "APO": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/APO.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "APP": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/APP.csv",
+      "rows": 1286,
+      "start": "2021-04-15"
+    },
+    "APTV": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/APTV.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "ARE": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/ARE.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "ARES": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/ARES.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "ATO": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/ATO.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AWK": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AWK.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "AXP": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/AXP.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "GOOG": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/GOOG.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "GOOGL": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/GOOGL.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
+    },
+    "LNT": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/LNT.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
     },
     "MMM": {
-      "end": "2026-05-26",
+      "end": "2026-05-28",
       "error": null,
       "path": "equity/sp500/MMM.csv",
-      "rows": 500,
-      "start": "2024-05-28"
+      "rows": 501,
+      "start": "2024-05-29"
+    },
+    "MO": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/MO.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
     },
     "MSFT": {
       "end": "2026-05-26",
@@ -90,8 +356,15 @@
       "path": "equity/sp500/NVDA.csv",
       "rows": 2532,
       "start": "2016-04-29"
+    },
+    "T": {
+      "end": "2026-05-28",
+      "error": null,
+      "path": "equity/sp500/T.csv",
+      "rows": 2533,
+      "start": "2016-05-02"
     }
   },
-  "updated": "2026-05-27",
+  "updated": "2026-05-29",
   "years": 10
 }

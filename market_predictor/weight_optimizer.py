@@ -180,6 +180,47 @@ def train_autonomous_weights(
         "scalerScales": scaler.scales,
     }
 
+
+def train_best_model(
+    datasets: list[dict[str, Any]],
+    horizon: int,
+    catalysts: dict[str, float],
+    train_fraction: float = 0.7,
+    confidence: float = 0.56,
+) -> dict[str, Any]:
+    """
+    Champion-Challenger Loop: Try all supported engines and pick the winner.
+    """
+    engines: list[Literal["logistic", "xgboost", "svm"]] = ["logistic", "xgboost", "svm"]
+    best_trained = None
+    best_hit = -1.0
+
+    print("--- Starting Champion-Challenger Autonomy Loop ---")
+    for engine in engines:
+        try:
+            print(f"Testing Challenger: {engine}...")
+            trained = train_autonomous_weights(
+                datasets,
+                horizon,
+                catalysts,
+                train_fraction=train_fraction,
+                confidence=confidence,
+                model_type=engine,
+            )
+            hit = trained["validation"]["hitRate"]
+            print(f"  {engine} Validation Hit Rate: {hit:.2%}")
+            if hit > best_hit:
+                best_hit = hit
+                best_trained = trained
+        except Exception as e:
+            print(f"  {engine} failed: {e}")
+
+    if not best_trained:
+        raise ValueError("All training engines failed.")
+
+    print(f"--- Champion Selected: {best_trained['method']} ({best_hit:.2%}) ---")
+    return best_trained
+
 def build_sequences(samples: list[TrainingSample], window_size: int = 10) -> tuple[list[np.ndarray], list[int]]:
     """Convert flat samples into windowed sequences for LSTM/Transformer."""
     sequences = []
