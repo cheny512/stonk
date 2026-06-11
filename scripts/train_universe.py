@@ -40,20 +40,6 @@ def main() -> int:
         confidence=confidence,
     )
     
-    print("Refining weights via coordinate descent...")
-    refined = refine_weights_coordinate_descent(
-        datasets,
-        horizon,
-        catalysts,
-        trained["settings"],
-        train_fraction=train_fraction,
-        confidence=confidence,
-    )
-    
-    trained["settings"] = refined["settings"]
-    trained["validation"] = refined["validation"]
-    trained["method"] = refined["method"]
-    
     # Save the trained model settings
     output_path = ROOT / "data" / "trained_model.json"
     with open(output_path, "w") as f:
