@@ -1,11 +1,17 @@
 const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
-async function request(path, { method = "GET", body, params } = {}) {
+async function request(path, { method = "GET", body, params, headers } = {}) {
   const query = params ? new URLSearchParams(params) : null;
   const url = `${API_BASE}${path}${query?.size ? `?${query}` : ""}`;
+  
+  const finalHeaders = { ...(headers || {}) };
+  if (body) {
+    finalHeaders["Content-Type"] = "application/json";
+  }
+
   const response = await fetch(url, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : undefined,
+    headers: Object.keys(finalHeaders).length > 0 ? finalHeaders : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!response.ok) {
@@ -138,8 +144,10 @@ export function fetchStockResearch(ticker) {
   return request(`/stock/${encodeURIComponent(ticker)}/research`);
 }
 
-export function fetchSynthesis(ticker) {
-  return request(`/stock/${encodeURIComponent(ticker)}/synthesis`);
+export function fetchSynthesis(ticker, apiKey) {
+  return request(`/stock/${encodeURIComponent(ticker)}/synthesis`, {
+    headers: apiKey ? { "X-OpenAI-Key": apiKey } : undefined,
+  });
 }
 
 export function runStockTest({

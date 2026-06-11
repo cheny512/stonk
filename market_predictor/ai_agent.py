@@ -11,13 +11,13 @@ class InvestmentThesis(BaseModel):
     bear_case: str = Field(description="The primary bear case, highlighting risks and negative sentiment.")
     sentiment_score: int = Field(description="An overall sentiment score from 1 (extremely bearish) to 10 (extremely bullish).")
 
-def synthesize_research(ticker: str, news_data: dict[str, Any], technical_data: dict[str, Any], prediction_data: dict[str, Any]) -> dict[str, Any]:
+def synthesize_research(ticker: str, news_data: dict[str, Any], technical_data: dict[str, Any], prediction_data: dict[str, Any], api_key: str | None = None) -> dict[str, Any]:
     """Uses LangGraph multi-agent orchestration to synthesize raw market data into a structured investment thesis."""
-    api_key = os.environ.get("OPENAI_API_KEY")
+    api_key = api_key or os.environ.get("OPENAI_API_KEY")
     if not api_key:
         # Graceful fallback if no API key is provided
         return {
-            "executive_summary": f"AI synthesis is offline because OPENAI_API_KEY is not set. Data for {ticker} indicates normal market conditions.",
+            "executive_summary": f"AI synthesis is offline because OPENAI_API_KEY is not provided. Enter it in the UI.",
             "bull_case": "Model predicts potential upward momentum based on historical technicals.",
             "bear_case": "Macroeconomic factors and sector rotation pose continuous risks.",
             "sentiment_score": 5
@@ -26,7 +26,7 @@ def synthesize_research(ticker: str, news_data: dict[str, Any], technical_data: 
     from market_predictor.graph import synthesize_research_graph
     
     try:
-        return synthesize_research_graph(ticker, news_data, technical_data, prediction_data)
+        return synthesize_research_graph(ticker, news_data, technical_data, prediction_data, api_key)
     except Exception as e:
         print(f"Error during LangGraph synthesis: {e}")
         return {

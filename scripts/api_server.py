@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -305,7 +305,7 @@ def _load_trained_model() -> dict[str, Any]:
     return {}
 
 @app.get("/api/stock/{ticker}/synthesis")
-def stock_synthesis(ticker: str) -> dict[str, Any]:
+def stock_synthesis(ticker: str, x_openai_key: str | None = Header(default=None)) -> dict[str, Any]:
     try:
         rows = load_ticker_rows(ticker)
         technical_data = build_stock_research(ticker, rows, include_fundamentals=True)
@@ -336,7 +336,7 @@ def stock_synthesis(ticker: str) -> dict[str, Any]:
             except Exception:
                 pass
                 
-        return synthesize_research(ticker, news_data, technical_data, prediction_data)
+        return synthesize_research(ticker, news_data, technical_data, prediction_data, api_key=x_openai_key)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

@@ -617,58 +617,93 @@ function ResearchSummaryPanel({ summary, error }) {
 }
 
 function AiAnalystPanel({ ticker }) {
+  const [apiKey, setApiKey] = React.useState(() => localStorage.getItem("openai_api_key") || "");
+  const [isEditingKey, setIsEditingKey] = React.useState(!apiKey);
   const [synthesis, setSynthesis] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
+
+  const saveKey = (key) => {
+    setApiKey(key);
+    localStorage.setItem("openai_api_key", key);
+    setIsEditingKey(false);
+  };
 
   React.useEffect(() => {
     if (!ticker) return;
     setLoading(true);
     setError(null);
     setSynthesis(null);
-    fetchSynthesis(ticker)
+    fetchSynthesis(ticker, apiKey)
       .then((data) => setSynthesis(data))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [ticker]);
+  }, [ticker, apiKey]);
 
   if (!ticker) return <Alert severity="info">Select a ticker to view AI analysis.</Alert>;
-  if (loading) return <Alert severity="info" icon={false}><LinearProgress sx={{ mb: 2 }}/> Synthesizing AI thesis based on recent news and technicals...</Alert>;
-  if (error) return <Alert severity="error">{error}</Alert>;
-  if (!synthesis || Object.keys(synthesis).length === 0) return <Alert severity="warning">No synthesis available.</Alert>;
 
   return (
     <Stack spacing={2}>
-      <Typography variant="body1" sx={{ fontWeight: 500, fontStyle: "italic" }}>
-        "{synthesis.executive_summary}"
-      </Typography>
-      
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-        <Paper variant="outlined" sx={{ flex: 1, p: 2, borderTop: "4px solid #168052" }}>
-          <Typography variant="overline" color="text.secondary" fontWeight={800}>Bull Case</Typography>
-          <Typography variant="body2" mt={1}>{synthesis.bull_case}</Typography>
+      {isEditingKey || !apiKey ? (
+        <Paper variant="outlined" sx={{ p: 2, bgcolor: "#f9fafb" }}>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <TextField 
+              size="small" 
+              label="OpenAI API Key" 
+              type="password" 
+              value={apiKey} 
+              onChange={(e) => setApiKey(e.target.value)} 
+              sx={{ flex: 1 }}
+              placeholder="sk-..."
+            />
+            <Button variant="contained" onClick={() => saveKey(apiKey)}>Save Key</Button>
+          </Stack>
+          <Typography variant="caption" color="text.secondary" mt={1} display="block">
+            Your key is stored locally in your browser and sent securely to the backend for analysis.
+          </Typography>
         </Paper>
-        <Paper variant="outlined" sx={{ flex: 1, p: 2, borderTop: "4px solid #b7413b" }}>
-          <Typography variant="overline" color="text.secondary" fontWeight={800}>Bear Case</Typography>
-          <Typography variant="body2" mt={1}>{synthesis.bear_case}</Typography>
-        </Paper>
-      </Stack>
-      
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <Typography variant="overline" color="text.secondary" fontWeight={800}>Sentiment Score</Typography>
-        <LinearProgress 
-          variant="determinate" 
-          value={((synthesis.sentiment_score || 5) / 10) * 100} 
-          sx={{ 
-            flex: 1, 
-            height: 10, 
-            borderRadius: 5,
-            backgroundColor: "rgba(183, 65, 59, 0.2)",
-            "& .MuiLinearProgress-bar": { backgroundColor: synthesis.sentiment_score >= 6 ? "#168052" : (synthesis.sentiment_score <= 4 ? "#b7413b" : "#f5a623") }
-          }} 
-        />
-        <Typography fontWeight={850}>{synthesis.sentiment_score} / 10</Typography>
-      </Box>
+      ) : (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button size="small" onClick={() => setIsEditingKey(true)}>Edit API Key</Button>
+        </Box>
+      )}
+
+      {loading && <Alert severity="info" icon={false}><LinearProgress sx={{ mb: 2 }}/> Synthesizing AI thesis based on recent news and technicals...</Alert>}
+      {error && !loading && <Alert severity="error">{error}</Alert>}
+      {!loading && !error && synthesis && Object.keys(synthesis).length > 0 && (
+        <>
+          <Typography variant="body1" sx={{ fontWeight: 500, fontStyle: "italic" }}>
+            "{synthesis.executive_summary}"
+          </Typography>
+          
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <Paper variant="outlined" sx={{ flex: 1, p: 2, borderTop: "4px solid #168052" }}>
+              <Typography variant="overline" color="text.secondary" fontWeight={800}>Bull Case</Typography>
+              <Typography variant="body2" mt={1}>{synthesis.bull_case}</Typography>
+            </Paper>
+            <Paper variant="outlined" sx={{ flex: 1, p: 2, borderTop: "4px solid #b7413b" }}>
+              <Typography variant="overline" color="text.secondary" fontWeight={800}>Bear Case</Typography>
+              <Typography variant="body2" mt={1}>{synthesis.bear_case}</Typography>
+            </Paper>
+          </Stack>
+          
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Typography variant="overline" color="text.secondary" fontWeight={800}>Sentiment Score</Typography>
+            <LinearProgress 
+              variant="determinate" 
+              value={((synthesis.sentiment_score || 5) / 10) * 100} 
+              sx={{ 
+                flex: 1, 
+                height: 10, 
+                borderRadius: 5,
+                backgroundColor: "rgba(183, 65, 59, 0.2)",
+                "& .MuiLinearProgress-bar": { backgroundColor: synthesis.sentiment_score >= 6 ? "#168052" : (synthesis.sentiment_score <= 4 ? "#b7413b" : "#f5a623") }
+              }} 
+            />
+            <Typography fontWeight={850}>{synthesis.sentiment_score} / 10</Typography>
+          </Box>
+        </>
+      )}
     </Stack>
   );
 }
