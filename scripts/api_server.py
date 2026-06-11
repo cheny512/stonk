@@ -23,7 +23,8 @@ from market_predictor.live_data import (
 )
 from market_predictor.live_signals import generate_live_signals
 from market_predictor.options_recommend import attach_options_to_signal
-from market_predictor.stock_research import build_stock_research
+from market_predictor.stock_research import build_stock_research, fetch_current_events
+from market_predictor.ai_agent import synthesize_research
 from market_predictor.ui_model import (
     DEFAULT_CATALYSTS,
     INDICATOR_CATALOG,
@@ -292,6 +293,50 @@ def stock_research(ticker: str, fundamentals: bool = True) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+import json
+def _load_trained_model() -> dict[str, Any]:
+    model_path = ROOT / "data" / "trained_model.json"
+    if model_path.exists():
+        with open(model_path, "r") as f:
+            return json.load(f)
+    return {}
+
+@app.get("/api/stock/{ticker}/synthesis")
+def stock_synthesis(ticker: str) -> dict[str, Any]:
+    try:
+        rows = load_ticker_rows(ticker)
+        technical_data = build_stock_research(ticker, rows, include_fundamentals=True)
+        news_data = fetch_current_events(ticker, limit=5)
+        
+        model_data = _load_trained_model()
+        settings = model_data.get("settings")
+        prediction_data = {}
+        if settings:
+            try:
+                result = latest_signal_test(
+                    rows=rows,
+                    ticker=ticker.upper(),
+                    horizon=5,
+                    confidence=0.56,
+                    settings=settings,
+                    catalysts=DEFAULT_CATALYSTS,
+                    dte=30,
+                    iv=0.4,
+                    trade_cost=0.001,
+                    train_fraction=0.7
+                )
+                prediction_data = {
+                    "probability_up": result.get("probability"),
+                    "signal": result.get("signal"),
+                    "expected_return": result.get("expectedReturn"),
+                }
+            except Exception:
+                pass
+                
+        return synthesize_research(ticker, news_data, technical_data, prediction_data)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

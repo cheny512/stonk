@@ -138,6 +138,10 @@ export function fetchStockResearch(ticker) {
   return request(`/stock/${encodeURIComponent(ticker)}/research`);
 }
 
+export function fetchSynthesis(ticker) {
+  return request(`/stock/${encodeURIComponent(ticker)}/synthesis`);
+}
+
 export function runStockTest({
   ticker,
   mode = "historical",
