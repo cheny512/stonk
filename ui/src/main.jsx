@@ -127,10 +127,21 @@ function metricColor(value) {
   return "default";
 }
 
+function dateLabel(value) {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 function PriceChart({ rows, range = "1Y" }) {
-  const width = 900;
-  const height = 320;
-  const pad = 36;
+  const [hoverIndex, setHoverIndex] = React.useState(null);
+  const svgRef = React.useRef(null);
+  const width = 960;
+  const height = 360;
+  const padX = 52;
+  const padTop = 26;
+  const padBottom = 44;
   const sliceData = React.useMemo(() => {
     if (!rows?.length) return [];
     const countMap = { "5D": 5, "1M": 21, "3M": 63, "6M": 126, "1Y": 252, "5Y": 1260, ALL: rows.length };
@@ -146,35 +157,139 @@ function PriceChart({ rows, range = "1Y" }) {
   }
 
   const closes = sliceData.map((row) => row.close);
+  const volumes = sliceData.map((row) => row.volume || 0);
   const min = Math.min(...closes);
   const max = Math.max(...closes);
   const span = max - min || 0.01;
-  const points = sliceData
-    .map((row, index) => {
-      const x = pad + (index / Math.max(1, sliceData.length - 1)) * (width - pad * 2);
-      const y = height - pad - ((row.close - min) / span) * (height - pad * 2);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
+  const first = sliceData[0];
   const last = sliceData.at(-1);
-  const lastY = height - pad - ((last.close - min) / span) * (height - pad * 2);
+  const activeIndex = hoverIndex !== null ? hoverIndex : sliceData.length - 1;
+  const activeRow = sliceData[activeIndex];
+  const activeChange = activeRow.close / first.close - 1;
+  
+  const totalChange = last.close / first.close - 1;
+  const positive = totalChange >= 0;
+  const strokeColor = positive ? "#168052" : "#b7413b";
+  
+  const plotHeight = height - padTop - padBottom;
+  const xFor = (index) => padX + (index / Math.max(1, sliceData.length - 1)) * (width - padX * 2);
+  const yFor = (close) => padTop + (1 - (close - min) / span) * plotHeight;
+  const points = sliceData
+    .map((row, index) => `${xFor(index).toFixed(1)},${yFor(row.close).toFixed(1)}`)
+    .join(" ");
+  const areaPoints = `${padX},${height - padBottom} ${points} ${width - padX},${height - padBottom}`;
+  const lastY = yFor(last.close);
+  const highIndex = closes.indexOf(max);
+  const lowIndex = closes.indexOf(min);
+  const maxVolume = Math.max(...volumes, 1);
+  const volumeTop = height - 86;
+  const volumeHeight = 38;
+  const labelRows = [
+    { label: "High", value: max, x: xFor(highIndex), y: yFor(max) },
+    { label: "Low", value: min, x: xFor(lowIndex), y: yFor(min) },
+  ];
+
+  const handlePointerMove = (e) => {
+    if (!svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    // Map SVG coordinates properly considering viewport scaling
+    const svgX = (x / rect.width) * width;
+    const rawIndex = Math.round(((svgX - padX) / (width - padX * 2)) * (sliceData.length - 1));
+    setHoverIndex(Math.max(0, Math.min(sliceData.length - 1, rawIndex)));
+  };
 
   return (
-    <Box sx={{ overflow: "hidden", border: "1px solid", borderColor: "divider", borderRadius: 2, mt: 2 }}>
-      <svg className="chart-svg enhanced" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Price chart">
+    <Box sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, mt: 2, overflow: "hidden", bgcolor: "#fff" }}>
+      <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "flex-start", sm: "center" }} justifyContent="space-between" spacing={1.5} sx={{ p: 2, pb: 0 }}>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 900 }}>${fmt(activeRow.close)}</Typography>
+          <Typography color={activeChange >= 0 ? "success.main" : "error.main"} fontWeight={850}>
+            {activeChange >= 0 ? "+" : ""}{money(activeRow.close - first.close, 2)} ({pct(activeChange)}) · {hoverIndex !== null ? dateLabel(activeRow.date) : range}
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+          <Chip size="small" label={`Open $${fmt(activeRow.open ?? activeRow.close)}`} />
+          <Chip size="small" label={`High $${fmt(max)}`} />
+          <Chip size="small" label={`Low $${fmt(min)}`} />
+          <Chip size="small" label={`Vol ${largeNumber(activeRow.volume)}`} />
+        </Stack>
+      </Stack>
+      <svg 
+        ref={svgRef}
+        className="chart-svg enhanced" 
+        viewBox={`0 0 ${width} ${height}`} 
+        role="img" 
+        aria-label="Price chart"
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => setHoverIndex(null)}
+        style={{ touchAction: "none" }}
+      >
+        <defs>
+          <linearGradient id={`priceArea-${positive ? "up" : "down"}`} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={strokeColor} stopOpacity="0.22" />
+            <stop offset="75%" stopColor={strokeColor} stopOpacity="0.03" />
+          </linearGradient>
+        </defs>
         {[0, 1, 2, 3].map((line) => {
-          const y = pad + ((height - pad * 2) / 3) * line;
-          return <line key={line} x1={pad} x2={width - pad} y1={y} y2={y} className="grid-line" strokeDasharray="4 4" />;
+          const y = padTop + (plotHeight / 3) * line;
+          const value = max - (span / 3) * line;
+          return (
+            <g key={line}>
+              <line x1={padX} x2={width - padX} y1={y} y2={y} className="grid-line" strokeDasharray="4 4" />
+              <text x={width - padX + 8} y={y + 4} className="chart-label axis">${fmt(value)}</text>
+            </g>
+          );
         })}
-        <polyline points={points} fill="none" className="price-line" />
-        <line x1={pad} x2={width - pad} y1={lastY} y2={lastY} className="current-price-line" strokeDasharray="3 3" />
-        <text x={pad} y={24} className="chart-label highlight">${fmt(max)}</text>
-        <text x={pad} y={height - 12} className="chart-label">${fmt(min)}</text>
-        <text x={width - pad} y={lastY - 6} className="chart-label current" textAnchor="end">
-          ${fmt(last.close)}
+        {sliceData.map((row, index) => {
+          const barHeight = ((row.volume || 0) / maxVolume) * volumeHeight;
+          const x = xFor(index);
+          return (
+            <rect
+              key={`${row.date}-${index}`}
+              x={x - 1.2}
+              y={volumeTop + volumeHeight - barHeight}
+              width="2.4"
+              height={barHeight}
+              fill={index > 0 && row.close < sliceData[index - 1].close ? "#d9a7a3" : "#9ec8b8"}
+              opacity={hoverIndex === null || hoverIndex === index ? "0.55" : "0.2"}
+            />
+          );
+        })}
+        <polyline points={areaPoints} fill={`url(#priceArea-${positive ? "up" : "down"})`} stroke="none" />
+        <polyline points={points} fill="none" className="price-line" style={{ stroke: strokeColor }} />
+        
+        {hoverIndex === null && (
+          <>
+            <circle cx={width - padX} cy={lastY} r="4.5" fill={strokeColor} />
+            <line x1={padX} x2={width - padX} y1={lastY} y2={lastY} className="current-price-line" style={{ stroke: strokeColor }} strokeDasharray="3 3" />
+            <text x={width - padX} y={lastY - 10} className="chart-label current" textAnchor="end">
+              ${fmt(last.close)}
+            </text>
+          </>
+        )}
+
+        {hoverIndex !== null && (
+          <g className="crosshair">
+            <line x1={xFor(hoverIndex)} x2={xFor(hoverIndex)} y1={padTop} y2={height - padBottom} stroke="#888" strokeWidth="1" strokeDasharray="4 4" />
+            <circle cx={xFor(hoverIndex)} cy={yFor(activeRow.close)} r="5" fill={strokeColor} stroke="#fff" strokeWidth="2" />
+          </g>
+        )}
+
+        {labelRows.map((item) => (
+          <g key={item.label} style={{ opacity: hoverIndex === null ? 1 : 0.3, transition: "opacity 0.2s" }}>
+            <circle cx={item.x} cy={item.y} r="3" fill="#18201f" opacity="0.42" />
+            <text x={item.x} y={item.y - 8} className="chart-label marker" textAnchor={item.x > width * 0.72 ? "end" : "start"}>
+              {item.label} ${fmt(item.value)}
+            </text>
+          </g>
+        ))}
+        
+        <text x={padX} y={height - 12} className="chart-label date">{dateLabel(sliceData[0].date)}</text>
+        <text x={width / 2} y={height - 12} className="chart-label date" textAnchor="middle">
+          {dateLabel(sliceData[Math.floor(sliceData.length / 2)].date)}
         </text>
-        <text x={pad} y={height - 4} className="chart-label date">{sliceData[0].date}</text>
-        <text x={width - pad} y={height - 4} className="chart-label date" textAnchor="end">{last.date}</text>
+        <text x={width - padX} y={height - 12} className="chart-label date" textAnchor="end">{dateLabel(last.date)}</text>
       </svg>
     </Box>
   );
@@ -496,6 +611,40 @@ function ResearchSummaryPanel({ summary, error }) {
       ) : (
         <Alert severity="info">{fundamentals.message || "Fundamentals unavailable from yfinance."}</Alert>
       )}
+    </Stack>
+  );
+}
+
+function CurrentEventsPanel({ events }) {
+  if (!events) return <Alert severity="info">Current events load with the research snapshot.</Alert>;
+  if (!events.available) {
+    return <Alert severity="info">{events.message || "No recent current events returned for this ticker."}</Alert>;
+  }
+  return (
+    <Stack spacing={1.5}>
+      <Typography variant="caption" color="text.secondary">
+        Source: {events.provider}. Headlines are for research context, not trade instructions.
+      </Typography>
+      {(events.items || []).map((item) => (
+        <Paper component={item.url ? "a" : "div"} href={item.url || undefined} target="_blank" rel="noreferrer" variant="outlined" key={`${item.title}-${item.published}`} sx={{
+          p: 1.5,
+          color: "inherit",
+          textDecoration: "none",
+          "&:hover": { borderColor: "primary.main", bgcolor: "rgba(20, 108, 92, 0.04)" },
+        }}>
+          <Stack spacing={0.5}>
+            <Typography fontWeight={850}>{item.title}</Typography>
+            <Typography variant="caption" color="text.secondary">
+              {[item.publisher, item.published].filter(Boolean).join(" · ")}
+            </Typography>
+            {item.summary && (
+              <Typography variant="body2" color="text.secondary">
+                {item.summary}
+              </Typography>
+            )}
+          </Stack>
+        </Paper>
+      ))}
     </Stack>
   );
 }
@@ -1092,6 +1241,7 @@ function App() {
                   <Paper variant="outlined" sx={{ p: 1.25 }}>
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                       <Button size="small" href="#research-snapshot">Snapshot</Button>
+                      <Button size="small" href="#current-events">Events</Button>
                       <Button size="small" href="#model-signal">Signal</Button>
                       <Button size="small" href="#price-history">History</Button>
                       <Button size="small" href="#backtest">Backtest</Button>
@@ -1108,6 +1258,16 @@ function App() {
                     action={<Button size="small" onClick={() => loadResearchSummary(activeTicker || tickerInput)}>Refresh</Button>}
                   >
                     <ResearchSummaryPanel summary={researchSummary} error={researchError} />
+                  </SectionCard>
+                )}
+
+                {(activeTicker || tickerInput || researchSummary) && (
+                  <SectionCard
+                    id="current-events"
+                    title="Current events"
+                    action={<Chip size="small" label={researchSummary?.events?.provider || "news"} />}
+                  >
+                    <CurrentEventsPanel events={researchSummary?.events} />
                   </SectionCard>
                 )}
 

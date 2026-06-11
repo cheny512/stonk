@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
 
 from .data import PriceRow
@@ -92,10 +92,10 @@ def build_history_summary(rows: list[PriceRow]) -> dict[str, Any]:
     up_volume = 0.0
     down_volume = 0.0
     for i in range(max(1, len(rows) - 20), len(rows)):
-      if rows[i].close >= rows[i - 1].close:
-          up_volume += rows[i].volume
-      else:
-          down_volume += rows[i].volume
+        if rows[i].close >= rows[i - 1].close:
+            up_volume += rows[i].volume
+        else:
+            down_volume += rows[i].volume
     volume_total = up_volume + down_volume
 
     return {
@@ -131,6 +131,71 @@ def build_history_summary(rows: list[PriceRow]) -> dict[str, Any]:
             "downVolume20d": down_volume,
             "buyPressure20d": up_volume / volume_total if volume_total else None,
         },
+    }
+
+
+def _news_time(value: Any) -> str | None:
+    if isinstance(value, dict):
+        value = value.get("raw") or value.get("fmt")
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value, tz=timezone.utc).date().isoformat()
+    if isinstance(value, str) and value:
+        return value[:10]
+    return None
+
+
+def _news_publisher(item: dict[str, Any]) -> str | None:
+    publisher = item.get("publisher") or item.get("provider") or item.get("source")
+    if isinstance(publisher, dict):
+        return publisher.get("displayName") or publisher.get("name")
+    if isinstance(publisher, str):
+        return publisher
+    return None
+
+
+def _news_url(item: dict[str, Any]) -> str | None:
+    link = item.get("canonicalUrl") or item.get("clickThroughUrl") or item.get("link") or item.get("url")
+    if isinstance(link, dict):
+        link = link.get("url")
+    if isinstance(link, str):
+        return link
+    return None
+
+
+def fetch_current_events(ticker: str, limit: int = 8) -> dict[str, Any]:
+    try:
+        import yfinance as yf
+
+        raw_news = yf.Ticker(ticker).news or []
+    except Exception as exc:
+        return {"available": False, "message": str(exc), "provider": "yfinance", "items": []}
+
+    items: list[dict[str, Any]] = []
+    for item in raw_news[:limit]:
+        content = item.get("content") if isinstance(item.get("content"), dict) else item
+        title = content.get("title") or item.get("title")
+        if not title:
+            continue
+        items.append(
+            {
+                "title": title,
+                "publisher": _news_publisher(content) or _news_publisher(item),
+                "published": _news_time(
+                    content.get("pubDate")
+                    or content.get("providerPublishTime")
+                    or item.get("providerPublishTime")
+                    or item.get("pubDate")
+                ),
+                "url": _news_url(content) or _news_url(item),
+                "summary": content.get("summary") or content.get("description") or item.get("summary"),
+            }
+        )
+
+    return {
+        "available": bool(items),
+        "provider": "yfinance",
+        "items": items,
+        "message": "" if items else "No current events returned for this ticker.",
     }
 
 
@@ -175,4 +240,5 @@ def build_stock_research(ticker: str, rows: list[PriceRow], include_fundamentals
         "ticker": ticker.upper(),
         **build_history_summary(rows),
         "fundamentals": fetch_fundamentals(ticker) if include_fundamentals else {"available": False},
+        "events": fetch_current_events(ticker),
     }

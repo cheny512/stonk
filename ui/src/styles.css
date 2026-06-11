@@ -390,9 +390,6 @@ button.primary:hover:not(:disabled) {
 .chart-svg {
   display: block;
   width: 100%;
-  margin-top: 14px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
   background: #fbfcfa;
 }
 
@@ -411,6 +408,17 @@ button.primary:hover:not(:disabled) {
 .chart-label {
   fill: var(--ink);
   font-size: 18px;
+}
+
+.chart-label.axis {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.chart-label.marker {
+  fill: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .gauge-wrap {
