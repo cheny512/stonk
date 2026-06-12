@@ -28,3 +28,6 @@ yfinance>=0.2.40
 
 # Tests
 pytest>=8.0.0
+pytest-cov
+respx>=0.21
+pytest-httpx

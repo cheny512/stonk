@@ -24,6 +24,7 @@ class AgentState(TypedDict):
     quant_analysis: str
     final_thesis: dict[str, Any]
     api_key: str | None
+    llm: Any | None
 
 def quant_node(state: AgentState) -> dict:
     """The Quant focuses purely on the numbers and model prediction."""
@@ -40,15 +41,19 @@ def quant_node(state: AgentState) -> dict:
 
 def editor_node(state: AgentState) -> dict:
     """The Editor synthesizes all data into the final thesis."""
-    api_key = state.get("api_key") or os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        return {"final_thesis": {
-            "executive_summary": "API Key missing. Enter your OpenAI API key in settings.",
-            "bull_case": "N/A", "bear_case": "N/A", "sentiment_score": 5
-        }}
+    llm = state.get("llm")
+    if llm:
+        structured_llm = llm
+    else:
+        api_key = state.get("api_key") or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            return {"final_thesis": {
+                "executive_summary": "API Key missing. Enter your OpenAI API key in settings.",
+                "bull_case": "N/A", "bear_case": "N/A", "sentiment_score": 5
+            }}
 
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=api_key)
-    structured_llm = llm.with_structured_output(InvestmentThesis)
+        real_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=api_key)
+        structured_llm = real_llm.with_structured_output(InvestmentThesis)
     
     prompt = f"""
     You are the Editor of a premier AI hedge fund. Synthesize the following into a structured thesis for {state['ticker']}.
@@ -84,7 +89,7 @@ workflow.add_edge("editor", END)
 
 app = workflow.compile()
 
-def synthesize_research_graph(ticker: str, news_data: dict[str, Any], technical_data: dict[str, Any], prediction_data: dict[str, Any], api_key: str | None = None) -> dict[str, Any]:
+def synthesize_research_graph(ticker: str, news_data: dict[str, Any], technical_data: dict[str, Any], prediction_data: dict[str, Any], api_key: str | None = None, llm: Any | None = None) -> dict[str, Any]:
     initial_state = {
         "ticker": ticker,
         "news_data": news_data,
@@ -92,7 +97,8 @@ def synthesize_research_graph(ticker: str, news_data: dict[str, Any], technical_
         "prediction_data": prediction_data,
         "quant_analysis": "",
         "final_thesis": {},
-        "api_key": api_key
+        "api_key": api_key,
+        "llm": llm
     }
     
     # Run the graph

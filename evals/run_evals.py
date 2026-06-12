@@ -2,6 +2,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 from pydantic import BaseModel, Field
 from openai import OpenAI
 
@@ -17,13 +18,12 @@ class EvalScore(BaseModel):
     hallucination_check: int = Field(description="Score 1-5: Did the model invent metrics or news not present in the prompt? (5 = no hallucinations)")
     reasoning: str = Field(description="Brief explanation of the scores.")
 
-def run_evals():
+def run_evals(llm: Any | None = None, judge_llm: Any | None = None):
     api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
+    if not api_key and not llm:
         print("Skipping evals: OPENAI_API_KEY not found.")
         return
 
-    client = OpenAI(api_key=api_key)
     test_cases_path = ROOT / "evals" / "test_cases.jsonl"
     report_path = ROOT / "evals" / "report.md"
     
@@ -41,41 +41,52 @@ def run_evals():
             ticker=case["ticker"],
             news_data=case["news_data"],
             technical_data=case["technical_data"],
-            prediction_data=case["prediction_data"]
+            prediction_data=case["prediction_data"],
+            llm=llm
         )
 
         # 2. Use LLM-as-a-Judge to evaluate the output
-        prompt = f"""
-        Evaluate the following AI-generated investment thesis based on the raw data provided.
-        
-        RAW DATA PROVIDED TO AI:
-        Ticker: {case['ticker']}
-        News: {json.dumps(case['news_data'])}
-        Technicals: {json.dumps(case['technical_data'])}
-        Prediction: {json.dumps(case['prediction_data'])}
-        
-        AI THESIS GENERATED:
-        {json.dumps(thesis, indent=2)}
-        """
-
-        try:
-            completion = client.beta.chat.completions.parse(
-                model="gpt-4o", # Use a smarter model as the judge
-                messages=[
-                    {"role": "system", "content": "You are a strict quantitative evaluation judge. Score the AI output."},
-                    {"role": "user", "content": prompt}
-                ],
-                response_format=EvalScore,
-            )
-            score = completion.choices[0].message.parsed
+        if judge_llm:
+            completion = judge_llm.invoke([
+                {"role": "system", "content": "You are a strict quantitative evaluation judge. Score the AI output."},
+                {"role": "user", "content": f"Evaluate the following AI-generated investment thesis based on the raw data provided.\n\nRAW DATA PROVIDED TO AI:\nTicker: {case['ticker']}\nNews: {json.dumps(case['news_data'])}\nTechnicals: {json.dumps(case['technical_data'])}\nPrediction: {json.dumps(case['prediction_data'])}\n\nAI THESIS GENERATED:\n{json.dumps(thesis, indent=2)}"}
+            ])
+            score = completion # Assume judge_llm returns the parsed object if injected
+        else:
+            client = OpenAI(api_key=api_key)
+            prompt = f"""
+            Evaluate the following AI-generated investment thesis based on the raw data provided.
             
+            RAW DATA PROVIDED TO AI:
+            Ticker: {case['ticker']}
+            News: {json.dumps(case['news_data'])}
+            Technicals: {json.dumps(case['technical_data'])}
+            Prediction: {json.dumps(case['prediction_data'])}
+            
+            AI THESIS GENERATED:
+            {json.dumps(thesis, indent=2)}
+            """
+
+            try:
+                resp = client.beta.chat.completions.parse(
+                    model="gpt-4o", # Use a smarter model as the judge
+                    messages=[
+                        {"role": "system", "content": "You are a strict quantitative evaluation judge. Score the AI output."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    response_format=EvalScore,
+                )
+                score = resp.choices[0].message.parsed
+            except Exception as e:
+                print(f"Eval failed for {case['ticker']}: {e}")
+                continue
+
+        if score:
             results.append({
                 "ticker": case["ticker"],
                 "thesis": thesis,
                 "scores": score.model_dump()
             })
-        except Exception as e:
-            print(f"Eval failed for {case['ticker']}: {e}")
 
     # 3. Generate Markdown Report
     with open(report_path, "w") as f:

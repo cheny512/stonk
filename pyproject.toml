@@ -1,0 +1,4 @@
+[tool.pytest.ini_options]
+addopts = "--cov=market_predictor --cov-report=term-missing --cov-fail-under=30"
+testpaths = ["tests"]
+python_files = "test_*.py"
