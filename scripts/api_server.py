@@ -1,19 +1,23 @@
 from __future__ import annotations
 
+import os
 import sys
 import time
 import uuid
 from pathlib import Path
 from typing import Any, Literal
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import Counter, Histogram, make_asgi_app
 from pydantic import BaseModel, Field
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 import structlog
 from market_predictor.logging_config import configure_logging, get_logger, request_id
@@ -52,7 +56,15 @@ BACKTEST_REQUESTS = Counter("stonk_backtest_requests_total", "Total backtest req
 LLM_CALLS = Counter("stonk_llm_calls_total", "Total LLM calls", ["outcome"])
 REQUEST_LATENCY = Histogram("stonk_request_latency_seconds", "Request latency", ["route"])
 
+# OpenAI Key from environment
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    get_logger(__name__).warning("openai_key_missing", message="AI features will be disabled")
+
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="stonk API", version="0.3.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.mount("/metrics", make_asgi_app())
 
 app.add_middleware(
@@ -185,6 +197,11 @@ def _resolve_cutoff(rows, body: StockTestBody) -> int:
 @app.get("/api/health")
 def api_health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/ai/health")
+def ai_health() -> dict[str, bool]:
+    return {"ai_enabled": bool(OPENAI_API_KEY)}
 
 
 @app.get("/api/meta/indicators")
@@ -356,7 +373,8 @@ def _load_trained_model() -> dict[str, Any]:
     return {}
 
 @app.get("/api/stock/{ticker}/synthesis")
-def stock_synthesis(ticker: str, x_openai_key: str | None = Header(default=None)) -> dict[str, Any]:
+@limiter.limit("30/minute")
+def stock_synthesis(request: Request, ticker: str) -> dict[str, Any]:
     with REQUEST_LATENCY.labels(route="/api/stock/synthesis").time():
         try:
             rows = load_ticker_rows(ticker)
@@ -389,17 +407,16 @@ def stock_synthesis(ticker: str, x_openai_key: str | None = Header(default=None)
                     pass
             
             # Increment LLM call counter
-            api_key = x_openai_key or os.environ.get("OPENAI_API_KEY")
-            if not api_key:
+            if not OPENAI_API_KEY:
                 LLM_CALLS.labels(outcome="no_api_key").inc()
             
             try:
-                thesis = synthesize_research(ticker, news_data, technical_data, prediction_data, api_key=x_openai_key)
+                thesis = synthesize_research(ticker, news_data, technical_data, prediction_data)
                 if thesis.get("executive_summary") and "offline" not in thesis.get("executive_summary", "").lower():
                      LLM_CALLS.labels(outcome="success").inc()
                 else:
                      # This handles the case where it returns a fallback dict but didn't actually call OpenAI
-                     if not api_key:
+                     if not OPENAI_API_KEY:
                          pass # already incremented no_api_key
                      else:
                          LLM_CALLS.labels(outcome="error").inc()

@@ -31,6 +31,10 @@ export function fetchHealth() {
   return request("/health");
 }
 
+export function fetchAiHealth() {
+  return request("/ai/health");
+}
+
 export function fetchIndicators() {
   return request("/meta/indicators");
 }
@@ -144,10 +148,8 @@ export function fetchStockResearch(ticker) {
   return request(`/stock/${encodeURIComponent(ticker)}/research`);
 }
 
-export function fetchSynthesis(ticker, apiKey) {
-  return request(`/stock/${encodeURIComponent(ticker)}/synthesis`, {
-    headers: apiKey ? { "X-OpenAI-Key": apiKey } : undefined,
-  });
+export function fetchSynthesis(ticker) {
+  return request(`/stock/${encodeURIComponent(ticker)}/synthesis`);
 }
 
 export function runStockTest({

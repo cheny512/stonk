@@ -68,9 +68,10 @@ docker-compose up --build
 *   **Frontend UI:** `http://localhost:5173`
 *   **Backend API:** `http://localhost:8000`
 
-### 🔑 Bring Your Own Key (BYOK)
+### 🔑 OpenAI Integration
 The traditional ML models run 100% locally and completely free. 
-To enable the **AI Analyst Synthesis**, simply enter your OpenAI API key securely in the React UI. The key is stored locally in your browser and used to power the LangGraph orchestration.
+To enable the **AI Analyst Synthesis**, set the `OPENAI_API_KEY` environment variable in your `.env` file or `docker-compose.yml`. The system automatically detects the key and enables the LangGraph orchestration.
+
 
 ---
 

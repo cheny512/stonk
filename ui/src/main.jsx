@@ -71,6 +71,7 @@ import {
   downloadUniverse,
   fetchDatasetMeta,
   fetchHealth,
+  fetchAiHealth,
   fetchIndicators,
   fetchInsiderActivity,
   fetchLiveSignals,
@@ -730,57 +731,25 @@ function ResearchSummaryPanel({ summary, error }) {
 }
 
 function AiAnalystPanel({ ticker }) {
-  const [apiKey, setApiKey] = React.useState(() => localStorage.getItem("openai_api_key") || "");
-  const [isEditingKey, setIsEditingKey] = React.useState(!apiKey);
   const [synthesis, setSynthesis] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
-
-  const saveKey = (key) => {
-    setApiKey(key);
-    localStorage.setItem("openai_api_key", key);
-    setIsEditingKey(false);
-  };
 
   React.useEffect(() => {
     if (!ticker) return;
     setLoading(true);
     setError(null);
     setSynthesis(null);
-    fetchSynthesis(ticker, apiKey)
+    fetchSynthesis(ticker)
       .then((data) => setSynthesis(data))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [ticker, apiKey]);
+  }, [ticker]);
 
   if (!ticker) return <Alert severity="info">Select a ticker to view AI analysis.</Alert>;
 
   return (
     <Stack spacing={2}>
-      {isEditingKey || !apiKey ? (
-        <Paper variant="outlined" sx={{ p: 2, bgcolor: "#f9fafb" }}>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <TextField 
-              size="small" 
-              label="OpenAI API Key" 
-              type="password" 
-              value={apiKey} 
-              onChange={(e) => setApiKey(e.target.value)} 
-              sx={{ flex: 1 }}
-              placeholder="sk-..."
-            />
-            <Button variant="contained" onClick={() => saveKey(apiKey)}>Save Key</Button>
-          </Stack>
-          <Typography variant="caption" color="text.secondary" mt={1} display="block">
-            Your key is stored locally in your browser and sent securely to the backend for analysis.
-          </Typography>
-        </Paper>
-      ) : (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <Button size="small" onClick={() => setIsEditingKey(true)}>Edit API Key</Button>
-        </Box>
-      )}
-
       {loading && <Alert severity="info" icon={false}><LinearProgress sx={{ mb: 2 }}/> Synthesizing AI thesis based on recent news and technicals...</Alert>}
       {error && !loading && <Alert severity="error">{error}</Alert>}
       {!loading && !error && synthesis && Object.keys(synthesis).length > 0 && (
@@ -906,6 +875,7 @@ function SidebarItem({ icon: Icon, label, active, onClick, badge }) {
 function App() {
   const [view, setView] = React.useState("research");
   const [backendOnline, setBackendOnline] = React.useState(false);
+  const [aiEnabled, setAiEnabled] = React.useState(false);
   const [datasets, setDatasets] = React.useState([]);
   const [activeTicker, setActiveTicker] = React.useState("");
   const [horizon, setHorizon] = React.useState(5);
@@ -999,6 +969,12 @@ function App() {
       try {
         await fetchHealth();
         setBackendOnline(true);
+        try {
+          const aiStatus = await fetchAiHealth();
+          setAiEnabled(aiStatus.ai_enabled);
+        } catch {
+          setAiEnabled(false);
+        }
         const meta = await fetchIndicators();
         if (meta.defaultCatalysts) setCatalysts(meta.defaultCatalysts);
         setProviders(await fetchProviders());
@@ -1600,7 +1576,13 @@ function App() {
                     icon={InsightsIcon}
                     action={<Chip size="small" color="primary" label="GPT-4o Mini" sx={{ fontWeight: 800 }} />}
                   >
-                    <AiAnalystPanel ticker={activeTicker || tickerInput} />
+                    {aiEnabled ? (
+                      <AiAnalystPanel ticker={activeTicker || tickerInput} />
+                    ) : (
+                      <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                        AI Analyst disabled — set OPENAI_API_KEY on the server to enable autonomous synthesis.
+                      </Alert>
+                    )}
                   </SectionCard>
                 )}
 

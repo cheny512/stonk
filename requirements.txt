@@ -14,6 +14,7 @@ langchain-openai>=0.1.0
 langchain-core>=0.2.0
 structlog>=24.0
 prometheus-client>=0.20
+slowapi
 
 # Local API for React UI (scripts/api_server.py)
 fastapi>=0.115.0
