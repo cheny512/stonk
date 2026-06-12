@@ -4,6 +4,10 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from market_predictor.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 # Fallback/Offline Schema
 class InvestmentThesis(BaseModel):
     executive_summary: str = Field(description="A 2-3 sentence overarching summary of the stock's current position and outlook.")
@@ -28,7 +32,7 @@ def synthesize_research(ticker: str, news_data: dict[str, Any], technical_data: 
     try:
         return synthesize_research_graph(ticker, news_data, technical_data, prediction_data, api_key)
     except Exception as e:
-        print(f"Error during LangGraph synthesis: {e}")
+        logger.exception("graph_synthesis_failed", ticker=ticker)
         return {
             "executive_summary": f"Failed to synthesize research due to an API error.",
             "bull_case": "Data unavailable.",

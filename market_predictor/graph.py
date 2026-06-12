@@ -6,6 +6,10 @@ from pydantic import BaseModel, Field
 from langgraph.graph import StateGraph, END
 import os
 
+from market_predictor.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 class InvestmentThesis(BaseModel):
     executive_summary: str = Field(description="A 2-3 sentence overarching summary of the stock's current position and outlook.")
     bull_case: str = Field(description="The primary bull case based on recent news and technical indicators.")
@@ -66,7 +70,7 @@ def editor_node(state: AgentState) -> dict:
         ])
         return {"final_thesis": result.model_dump()}
     except Exception as e:
-        print(f"Error in Editor Node: {e}")
+        logger.exception("editor_node_failed", ticker=state.get("ticker"))
         return {"final_thesis": {}}
 
 # Build the Graph

@@ -183,6 +183,10 @@ def train_autonomous_weights(
     }
 
 
+from market_predictor.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 def train_best_model(
     datasets: list[dict[str, Any]],
     horizon: int,
@@ -197,10 +201,10 @@ def train_best_model(
     best_trained = None
     best_hit = -1.0
 
-    print("--- Starting Champion-Challenger Autonomy Loop ---")
+    logger.info("champion_challenger_started")
     for engine in engines:
         try:
-            print(f"Testing Challenger: {engine}...")
+            logger.info("testing_challenger", engine=engine)
             trained = train_autonomous_weights(
                 datasets,
                 horizon,
@@ -210,17 +214,17 @@ def train_best_model(
                 model_type=engine,
             )
             hit = trained["validation"]["hitRate"]
-            print(f"  {engine} Validation Hit Rate: {hit:.2%}")
+            logger.info("challenger_result", engine=engine, hit_rate=round(hit, 4))
             if hit > best_hit:
                 best_hit = hit
                 best_trained = trained
         except Exception as e:
-            print(f"  {engine} failed: {e}")
+            logger.error("challenger_failed", engine=engine, error=str(e))
 
     if not best_trained:
         raise ValueError("All training engines failed.")
 
-    print(f"--- Champion Selected: {best_trained['method']} ({best_hit:.2%}) ---")
+    logger.info("champion_selected", method=best_trained['method'], hit_rate=round(best_hit, 4))
     return best_trained
 
 def build_sequences(samples: list[TrainingSample], window_size: int = 10) -> tuple[list[np.ndarray], list[int]]:

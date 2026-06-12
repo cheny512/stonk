@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+import time
+import uuid
 from pathlib import Path
 from typing import Any, Literal
 
@@ -8,10 +10,13 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import Counter, Histogram, make_asgi_app
 from pydantic import BaseModel, Field
 
+import structlog
+from market_predictor.logging_config import configure_logging, get_logger, request_id
 from market_predictor.config import api_host, api_port
 from market_predictor.insiders import fetch_insider_activity
 from market_predictor.live_data import (
@@ -37,7 +42,19 @@ from market_predictor.ui_model import (
 from market_predictor.universe import download_universe, list_universe, load_datasets
 from market_predictor.weight_optimizer import refine_weights_coordinate_descent, train_autonomous_weights
 
+# Configure structured logging
+configure_logging()
+logger = get_logger(__name__)
+
+# Prometheus metrics
+TRAIN_REQUESTS = Counter("stonk_train_requests_total", "Total train requests", ["model_kind"])
+BACKTEST_REQUESTS = Counter("stonk_backtest_requests_total", "Total backtest requests")
+LLM_CALLS = Counter("stonk_llm_calls_total", "Total LLM calls", ["outcome"])
+REQUEST_LATENCY = Histogram("stonk_request_latency_seconds", "Request latency", ["route"])
+
 app = FastAPI(title="stonk API", version="0.3.0")
+app.mount("/metrics", make_asgi_app())
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
@@ -45,6 +62,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def logging_middleware(request: Request, call_next):
+    req_id = str(uuid.uuid4())
+    token = request_id.set(req_id)
+    structlog.contextvars.bind_contextvars(request_id=req_id)
+    
+    start_time = time.perf_counter()
+    logger.info("request_started", method=request.method, path=request.url.path)
+    
+    try:
+        response = await call_next(request)
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        logger.info(
+            "request_completed",
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            duration_ms=round(duration_ms, 2)
+        )
+        return response
+    finally:
+        request_id.reset(token)
+        structlog.contextvars.clear_contextvars()
+
 
 
 class CatalystsBody(BaseModel):
@@ -174,38 +216,43 @@ def universe_download(body: DownloadBody) -> dict[str, Any]:
 
 @app.post("/api/research/train")
 def research_train(body: TrainBody) -> dict[str, Any]:
+    TRAIN_REQUESTS.labels(model_kind=body.model_type).inc()
     if not body.tickers:
         raise HTTPException(status_code=400, detail="Select at least one ticker")
-    try:
-        datasets = load_datasets(body.tickers)
-        catalysts = _catalysts_dict(body.catalysts)
-        if body.method == "correlation":
-            trained = train_settings_from_correlations(datasets, body.horizon, catalysts)
-        else:
-            trained = train_autonomous_weights(
-                datasets,
-                body.horizon,
-                catalysts,
-                train_fraction=body.train_fraction,
-                confidence=body.confidence,
-                model_type=body.model_type,
-            )
-            if body.refine and body.model_type == "logistic":
-                polished = refine_weights_coordinate_descent(
+    with REQUEST_LATENCY.labels(route="/api/research/train").time():
+        try:
+            datasets = load_datasets(body.tickers)
+            catalysts = _catalysts_dict(body.catalysts)
+            if body.method == "correlation":
+                trained = train_settings_from_correlations(datasets, body.horizon, catalysts)
+            else:
+                trained = train_autonomous_weights(
                     datasets,
                     body.horizon,
                     catalysts,
-                    trained["settings"],
                     train_fraction=body.train_fraction,
                     confidence=body.confidence,
+                    model_type=body.model_type,
                 )
-                trained["settings"] = polished["settings"]
-                trained["validation"] = polished["validation"]
-                trained["method"] = polished["method"]
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+                if body.refine and body.model_type == "logistic":
+                    polished = refine_weights_coordinate_descent(
+                        datasets,
+                        body.horizon,
+                        catalysts,
+                        trained["settings"],
+                        train_fraction=body.train_fraction,
+                        confidence=body.confidence,
+                    )
+                    trained["settings"] = polished["settings"]
+                    trained["validation"] = polished["validation"]
+                    trained["method"] = polished["method"]
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            logger.exception("train_failed", tickers=body.tickers)
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     return trained
 
 
@@ -240,28 +287,32 @@ def live_signals(body: LiveSignalsBody) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
 @app.post("/api/research/portfolio")
 def research_portfolio(body: PortfolioBody) -> dict[str, Any]:
+    BACKTEST_REQUESTS.inc()
     if not body.tickers:
         raise HTTPException(status_code=400, detail="Select at least one ticker")
-    try:
-        datasets = load_datasets(body.tickers)
-        portfolio = run_portfolio_backtest(
-            datasets,
-            body.horizon,
-            body.confidence,
-            body.settings,
-            _catalysts_dict(body.catalysts),
-            body.trade_cost,
-            body.train_fraction,
-        )
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    with REQUEST_LATENCY.labels(route="/api/research/portfolio").time():
+        try:
+            datasets = load_datasets(body.tickers)
+            portfolio = run_portfolio_backtest(
+                datasets,
+                body.horizon,
+                body.confidence,
+                body.settings,
+                _catalysts_dict(body.catalysts),
+                body.trade_cost,
+                body.train_fraction,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            logger.exception("backtest_failed", tickers=body.tickers)
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
     return portfolio
+
 
 
 @app.post("/api/stock/fetch")
@@ -306,39 +357,60 @@ def _load_trained_model() -> dict[str, Any]:
 
 @app.get("/api/stock/{ticker}/synthesis")
 def stock_synthesis(ticker: str, x_openai_key: str | None = Header(default=None)) -> dict[str, Any]:
-    try:
-        rows = load_ticker_rows(ticker)
-        technical_data = build_stock_research(ticker, rows, include_fundamentals=True)
-        news_data = fetch_current_events(ticker, limit=5)
-        
-        model_data = _load_trained_model()
-        settings = model_data.get("settings")
-        prediction_data = {}
-        if settings:
+    with REQUEST_LATENCY.labels(route="/api/stock/synthesis").time():
+        try:
+            rows = load_ticker_rows(ticker)
+            technical_data = build_stock_research(ticker, rows, include_fundamentals=True)
+            news_data = fetch_current_events(ticker, limit=5)
+            
+            model_data = _load_trained_model()
+            settings = model_data.get("settings")
+            prediction_data = {}
+            if settings:
+                try:
+                    result = latest_signal_test(
+                        rows=rows,
+                        ticker=ticker.upper(),
+                        horizon=5,
+                        confidence=0.56,
+                        settings=settings,
+                        catalysts=DEFAULT_CATALYSTS,
+                        dte=30,
+                        iv=0.4,
+                        trade_cost=0.001,
+                        train_fraction=0.7
+                    )
+                    prediction_data = {
+                        "probability_up": result.get("probability"),
+                        "signal": result.get("signal"),
+                        "expected_return": result.get("expectedReturn"),
+                    }
+                except Exception:
+                    pass
+            
+            # Increment LLM call counter
+            api_key = x_openai_key or os.environ.get("OPENAI_API_KEY")
+            if not api_key:
+                LLM_CALLS.labels(outcome="no_api_key").inc()
+            
             try:
-                result = latest_signal_test(
-                    rows=rows,
-                    ticker=ticker.upper(),
-                    horizon=5,
-                    confidence=0.56,
-                    settings=settings,
-                    catalysts=DEFAULT_CATALYSTS,
-                    dte=30,
-                    iv=0.4,
-                    trade_cost=0.001,
-                    train_fraction=0.7
-                )
-                prediction_data = {
-                    "probability_up": result.get("probability"),
-                    "signal": result.get("signal"),
-                    "expected_return": result.get("expectedReturn"),
-                }
-            except Exception:
-                pass
-                
-        return synthesize_research(ticker, news_data, technical_data, prediction_data, api_key=x_openai_key)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+                thesis = synthesize_research(ticker, news_data, technical_data, prediction_data, api_key=x_openai_key)
+                if thesis.get("executive_summary") and "offline" not in thesis.get("executive_summary", "").lower():
+                     LLM_CALLS.labels(outcome="success").inc()
+                else:
+                     # This handles the case where it returns a fallback dict but didn't actually call OpenAI
+                     if not api_key:
+                         pass # already incremented no_api_key
+                     else:
+                         LLM_CALLS.labels(outcome="error").inc()
+                return thesis
+            except Exception as exc:
+                LLM_CALLS.labels(outcome="error").inc()
+                raise exc
+
+        except Exception as exc:
+            logger.exception("synthesis_failed", ticker=ticker)
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.get("/api/stock/{ticker}/insiders")
