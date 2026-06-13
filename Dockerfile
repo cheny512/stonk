@@ -20,5 +20,8 @@ COPY . .
 # Expose port
 EXPOSE 8000
 
+# Volume for data
+VOLUME ["/app/data"]
+
 # Run FastAPI server
 CMD ["python", "scripts/api_server.py"]

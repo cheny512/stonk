@@ -15,6 +15,8 @@ langchain-core>=0.2.0
 structlog>=24.0
 prometheus-client>=0.20
 slowapi
+sqlalchemy>=2.0
+alembic>=1.13
 
 # Local API for React UI (scripts/api_server.py)
 fastapi>=0.115.0

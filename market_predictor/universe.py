@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -84,11 +85,20 @@ def download_ticker_history(ticker: str, years: int = YEARS_DEFAULT) -> Path:
 
 def load_ticker_rows(ticker: str) -> list[PriceRow]:
     symbol = ticker.upper()
+    if os.environ.get("STONK_USE_SQLITE") == "1":
+        from market_predictor.db.engine import get_engine, get_session_factory
+        from market_predictor.db.repo import get_bars
+        session_factory = get_session_factory()
+        with session_factory() as session:
+            rows = get_bars(session, symbol)
+            if rows:
+                return rows
+    
     for path in (ticker_csv_path(symbol), custom_dir() / f"{symbol}.csv"):
         if path.exists():
             return load_price_csv(path)
     raise FileNotFoundError(
-        f"No CSV for {symbol}. Load the ticker from Stock Test or download S&P 500 data."
+        f"No data for {symbol}. Load the ticker from Stock Test or download S&P 500 data."
     )
 
 
