@@ -152,11 +152,14 @@ export function fetchSynthesis(ticker) {
   return request(`/stock/${encodeURIComponent(ticker)}/synthesis`);
 }
 
+/**
+ * @param {import("./types").StockTestRequest} body
+ */
 export function runStockTest({
   ticker,
   mode = "historical",
-  cutoffIndex,
-  asOf,
+  cutoffIndex = null,
+  asOf = null,
   refresh = false,
   years = 10,
   provider = "auto",
