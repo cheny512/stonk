@@ -8,12 +8,19 @@ export function OptionsContracts({ options }: { options?: OptionsChain }) {
     return <Alert severity="info">{options?.message || "No options chain available for this signal."}</Alert>;
   }
   const contracts = (options as any).contracts || options.quotes || [];
+  const observedIv = (options as any).ivSource === "observed-contract-median" && Number.isFinite((options as any).medianIv);
+  const tradeEligible = (options as any).tradeEligible !== false;
+  const ivLabel = observedIv
+    ? `observed median IV ${pct((options as any).medianIv)}`
+    : `scenario IV assumption ${pct((options as any).analysisIv)} (contract IV unavailable)`;
   return (
     <Stack spacing={2}>
-      <Alert severity="success">
-        Educational screen · {(options as any).side?.toUpperCase()} scenario · exp {(options as any).targetExpiration} · IV{" "}
-        {pct((options as any).medianIv)} · chain as of {(options as any).asOf}
+      <Alert severity={observedIv && tradeEligible ? "success" : "warning"}>
+        Educational screen · {tradeEligible ? "evidence safeguards passed" : "NO-TRADE SAFEGUARD ACTIVE"} · {(options as any).side?.toUpperCase()} scenario · exp {(options as any).targetExpiration} · {ivLabel} · chain as of {(options as any).asOf}
       </Alert>
+      {!tradeEligible && (options as any).screeningNote && (
+        <Typography variant="body2" fontWeight={700}>{(options as any).screeningNote}</Typography>
+      )}
       <Typography variant="caption" color="text.secondary">
         {(options as any).methodology} {(options as any).riskDisclosure}
       </Typography>

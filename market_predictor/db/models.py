@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from datetime import date, datetime
-from sqlalchemy import BigInteger, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text, PrimaryKeyConstraint
+from datetime import UTC, date, datetime
+from sqlalchemy import BigInteger, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
     pass
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 class Ticker(Base):
     __tablename__ = "tickers"
@@ -56,3 +60,42 @@ class Trade(Base):
     prob_up: Mapped[float] = mapped_column(Float)
     expected_return: Mapped[float] = mapped_column(Float)
     realized: Mapped[float] = mapped_column(Float)
+
+
+class User(Base):
+    """A durable identity that can begin anonymously and gain login credentials later."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    public_id: Mapped[str] = mapped_column(String(36), unique=True, index=True)
+    access_token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    account_kind: Mapped[str] = mapped_column(String(20), default="anonymous")
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True, unique=True)
+    display_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class Watchlist(Base):
+    __tablename__ = "watchlists"
+    __table_args__ = (UniqueConstraint("user_id", "slug", name="uq_watchlists_user_slug"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(80), default="Saved stocks")
+    slug: Mapped[str] = mapped_column(String(40), default="saved-stocks")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class WatchlistItem(Base):
+    __tablename__ = "watchlist_items"
+    __table_args__ = (UniqueConstraint("watchlist_id", "symbol", name="uq_watchlist_items_symbol"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    watchlist_id: Mapped[int] = mapped_column(Integer, ForeignKey("watchlists.id", ondelete="CASCADE"), index=True)
+    symbol: Mapped[str] = mapped_column(String(12))
+    position: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)

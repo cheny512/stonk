@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -212,7 +213,60 @@ def _news_url(item: dict[str, Any]) -> str | None:
     return None
 
 
-def fetch_current_events(ticker: str, limit: int = 8) -> dict[str, Any]:
+_COMPANY_SUFFIXES = {
+    "co",
+    "company",
+    "corp",
+    "corporation",
+    "group",
+    "holdings",
+    "inc",
+    "incorporated",
+    "limited",
+    "ltd",
+    "plc",
+}
+
+
+def _company_relevance_terms(company_name: str | None) -> set[str]:
+    if not company_name:
+        return set()
+    base_name = re.sub(
+        r"\b(?:co|company|corp|corporation|group|holdings|inc|incorporated|limited|ltd|plc)\.?\b",
+        "",
+        company_name,
+        flags=re.IGNORECASE,
+    ).strip(" ,.-").lower()
+    words = [word.lower() for word in re.findall(r"[A-Za-z0-9]+", company_name)]
+    meaningful = [word for word in words if word not in _COMPANY_SUFFIXES and len(word) >= 3]
+    terms: set[str] = set()
+    if len(base_name) >= 3:
+        terms.add(base_name)
+    if meaningful:
+        terms.add(meaningful[0])
+    if len(meaningful) >= 2:
+        terms.add(" ".join(meaningful[:2]))
+    if len(meaningful) >= 3:
+        terms.add(" ".join(meaningful[:3]))
+    return terms
+
+
+def _news_relevance(ticker: str, company_name: str | None, title: str, summary: str | None) -> str | None:
+    symbol = ticker.strip().upper()
+    text = f"{title} {summary or ''}"
+    if len(symbol) <= 2:
+        symbol_pattern = rf"(?:\${re.escape(symbol)}\b|\b(?:NYSE|NASDAQ)\s*:\s*{re.escape(symbol)}\b|\({re.escape(symbol)}\))"
+    else:
+        symbol_pattern = rf"(?<![A-Z0-9])\$?{re.escape(symbol)}(?![A-Z0-9])"
+    if re.search(symbol_pattern, text, flags=re.IGNORECASE):
+        return "ticker"
+    lowered = text.lower()
+    if any(re.search(rf"\b{re.escape(term)}\b", lowered) for term in _company_relevance_terms(company_name)):
+        return "company"
+    return None
+
+
+def fetch_current_events(ticker: str, limit: int = 8, company_name: str | None = None) -> dict[str, Any]:
     retrieved_at = datetime.now(timezone.utc).isoformat()
     try:
         import yfinance as yf
@@ -228,10 +282,16 @@ def fetch_current_events(ticker: str, limit: int = 8) -> dict[str, Any]:
         }
 
     items: list[dict[str, Any]] = []
-    for item in raw_news[:limit]:
+    inspected = 0
+    for item in raw_news[: max(limit * 4, 32)]:
+        inspected += 1
         content = item.get("content") if isinstance(item.get("content"), dict) else item
         title = content.get("title") or item.get("title")
         if not title:
+            continue
+        summary = content.get("summary") or content.get("description") or item.get("summary")
+        relevance = _news_relevance(ticker, company_name, str(title), summary)
+        if relevance is None:
             continue
         items.append(
             {
@@ -244,16 +304,21 @@ def fetch_current_events(ticker: str, limit: int = 8) -> dict[str, Any]:
                     or item.get("pubDate")
                 ),
                 "url": _news_url(content) or _news_url(item),
-                "summary": content.get("summary") or content.get("description") or item.get("summary"),
+                "summary": summary,
+                "relevance": relevance,
             }
         )
+        if len(items) >= limit:
+            break
 
     return {
         "available": bool(items),
         "provider": "yfinance",
         "retrievedAt": retrieved_at,
         "items": items,
-        "message": "" if items else "No current events returned for this ticker.",
+        "discardedCount": max(0, inspected - len(items)),
+        "relevanceMethod": "Ticker or company-name match in the headline or summary.",
+        "message": "" if items else "No recent ticker-specific current events passed the relevance check.",
     }
 
 
@@ -297,6 +362,7 @@ def fetch_fundamentals(ticker: str) -> dict[str, Any]:
 
 def build_stock_research(ticker: str, rows: list[PriceRow], include_fundamentals: bool = True) -> dict[str, Any]:
     generated_at = datetime.now(timezone.utc).isoformat()
+    fundamentals = fetch_fundamentals(ticker) if include_fundamentals else {"available": False}
     return {
         "ticker": ticker.upper(),
         "schemaVersion": "1.0",
@@ -308,6 +374,6 @@ def build_stock_research(ticker: str, rows: list[PriceRow], include_fundamentals
             "freshnessWarning": "Daily and aggregated feeds may be delayed; verify before acting.",
         },
         **build_history_summary(rows),
-        "fundamentals": fetch_fundamentals(ticker) if include_fundamentals else {"available": False},
-        "events": fetch_current_events(ticker),
+        "fundamentals": fundamentals,
+        "events": fetch_current_events(ticker, company_name=fundamentals.get("name")),
     }

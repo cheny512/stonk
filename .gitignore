@@ -19,6 +19,9 @@ data/*
 !data/equity/.gitkeep
 !data/equity/custom/
 !data/equity/custom/.gitkeep
+data/equity/massive/
+data/equity/thetadata/
+data/options/thetadata/
 !.gitkeep
 data/*.db
 data/*.sqlite

@@ -55,6 +55,18 @@ cd ui && npm ci && npm run dev
 
 Open the UI at [http://127.0.0.1:5173](http://127.0.0.1:5173). The API runs at [http://127.0.0.1:8000](http://127.0.0.1:8000); a 404 at the API root is expected. Health is available at `/api/health`.
 
+### Saved-stock persistence
+
+Bookmarks are offline-first: the UI writes immediately to browser storage, then backs the ordered list up to the configured SQL database through a token-protected anonymous device profile. No login or external auth credential is required. Failed syncs remain local and retry during a later API session.
+
+SQLite is the local default at `data/stonk.db`. Missing tables are provisioned automatically for local development. Managed deployments should set `DATABASE_URL` to their database and apply versioned migrations before starting the API:
+
+```bash
+.venv/bin/alembic upgrade head
+```
+
+The `users` schema intentionally supports upgrading an anonymous profile to a verified account later. Until login is added, clearing browser site data also removes the device-profile token needed to retrieve that profile from the database.
+
 ### ThetaData v3 options
 
 ThetaData is the default options provider, so Massive options access is not required. The adapter talks to the local [Theta Terminal v3](https://docs.thetadata.us/Articles/Getting-Started/Getting-Started.html) REST server; it never sends ThetaData credentials from the web API.

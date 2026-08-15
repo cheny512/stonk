@@ -9,11 +9,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException, Header, Request
+from fastapi import Depends, FastAPI, HTTPException, Header, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import Counter, Histogram, make_asgi_app
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -43,6 +44,14 @@ from market_predictor.backtest import run_walk_forward_backtest
 from market_predictor.features import build_examples
 from market_predictor.jobs import LocalJobManager, configured_job_path
 from market_predictor.security import sanitize_error_message
+from market_predictor.db.engine import get_engine, get_session_factory, initialize_database
+from market_predictor.db.models import User
+from market_predictor.db.repo import (
+    create_anonymous_user,
+    get_user_by_access_token,
+    get_watchlist_symbols,
+    replace_watchlist_symbols,
+)
 from market_predictor.ui_model import (
     DEFAULT_CATALYSTS,
     INDICATOR_CATALOG,
@@ -76,6 +85,8 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.mount("/metrics", make_asgi_app())
 JOB_MANAGER = LocalJobManager(configured_job_path())
+DATABASE_ENGINE = get_engine()
+DATABASE_SESSIONS = get_session_factory(DATABASE_ENGINE)
 
 app.add_middleware(
     CORSMiddleware,
@@ -91,6 +102,7 @@ async def typed_http_error(request: Request, exc: HTTPException) -> JSONResponse
     message = sanitize_error_message(exc.detail)
     code_by_status = {
         400: "invalid_request",
+        401: "unauthorized",
         404: "not_found",
         409: "conflict",
         429: "rate_limited",
@@ -234,6 +246,51 @@ class WalkForwardBody(BaseModel):
     allow_overlapping: bool = False
 
 
+class AnonymousUserBody(BaseModel):
+    timezone: str = Field("UTC", min_length=1, max_length=64)
+
+
+class WatchlistBody(BaseModel):
+    tickers: list[str] = Field(default_factory=list, max_length=25)
+
+
+def get_database_session():
+    initialize_database(DATABASE_ENGINE)
+    with DATABASE_SESSIONS() as session:
+        yield session
+
+
+def require_user(
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_database_session),
+) -> User:
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(
+            status_code=401,
+            detail="A device-profile access token is required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = get_user_by_access_token(session, token.strip())
+    if user is None:
+        raise HTTPException(
+            status_code=401,
+            detail="The device-profile access token is invalid",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+def _user_payload(user: User) -> dict[str, Any]:
+    return {
+        "id": user.public_id,
+        "accountKind": user.account_kind,
+        "displayName": user.display_name,
+        "timezone": user.timezone,
+        "createdAt": user.created_at.replace(tzinfo=timezone.utc).isoformat(),
+    }
+
+
 def _catalysts_dict(body: CatalystsBody | None) -> dict[str, float]:
     if body is None:
         return dict(DEFAULT_CATALYSTS)
@@ -253,6 +310,41 @@ def _resolve_cutoff(rows, body: StockTestBody) -> int:
 @app.get("/api/health")
 def api_health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/api/users/anonymous", status_code=201)
+def create_anonymous_profile(
+    body: AnonymousUserBody,
+    session: Session = Depends(get_database_session),
+) -> dict[str, Any]:
+    user, access_token = create_anonymous_user(session, timezone=body.timezone)
+    return {
+        "accessToken": access_token,
+        "user": _user_payload(user),
+        "watchlist": {"tickers": []},
+    }
+
+
+@app.get("/api/users/me")
+def current_profile(user: User = Depends(require_user)) -> dict[str, Any]:
+    return {"user": _user_payload(user)}
+
+
+@app.get("/api/users/me/watchlist")
+def current_watchlist(
+    user: User = Depends(require_user),
+    session: Session = Depends(get_database_session),
+) -> dict[str, Any]:
+    return {"tickers": get_watchlist_symbols(session, user.id)}
+
+
+@app.put("/api/users/me/watchlist")
+def update_current_watchlist(
+    body: WatchlistBody,
+    user: User = Depends(require_user),
+    session: Session = Depends(get_database_session),
+) -> dict[str, Any]:
+    return {"tickers": replace_watchlist_symbols(session, user.id, body.tickers)}
 
 
 @app.get("/api/ai/health")
@@ -542,6 +634,13 @@ def _execute_stock_autopilot(ticker: str, body: AutopilotBody) -> dict[str, Any]
                 "contracts": [],
             }
     result["tradePlan"] = build_trade_plan(rows, result, body.horizon)
+    if result.get("options", {}).get("available"):
+        trade_eligible = result["tradePlan"]["action"] != "No trade"
+        result["options"]["tradeEligible"] = trade_eligible
+        if not trade_eligible:
+            result["options"]["screeningNote"] = (
+                "The stock-level evidence safeguards did not support an entry. Contracts are shown only to teach chain structure and risk."
+            )
     result["thesis"] = build_rules_thesis(symbol, result, research, body.horizon)
     try:
         examples = build_examples(rows, horizon=body.horizon)

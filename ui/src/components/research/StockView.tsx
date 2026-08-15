@@ -8,6 +8,7 @@ import {
   Collapse,
   Divider,
   FormControlLabel,
+  IconButton,
   Paper,
   Slider,
   Stack,
@@ -28,6 +29,8 @@ import {
   Science as ScienceIcon,
   ShowChart as ShowChartIcon,
   Tune as TuneIcon,
+  Bookmark as BookmarkIcon,
+  BookmarkBorder as BookmarkBorderIcon,
 } from "@mui/icons-material";
 
 import {
@@ -53,7 +56,9 @@ import { JudgmentGuide } from "./JudgmentGuide";
 import { ResearchSummaryPanel } from "./ResearchSummaryPanel";
 import { CurrentEventsPanel } from "./CurrentEventsPanel";
 import { AiAnalystPanel } from "./AiAnalystPanel";
+import { SavedStockCards } from "./SavedStockCards";
 import { StockHistory, StockTestRequest, Dataset } from "../../types";
+import { useStockBookmarks } from "../../hooks/useStockBookmarks";
 
 interface StockViewProps {
   aiEnabled: boolean;
@@ -80,42 +85,73 @@ export default function StockView({ aiEnabled, backendOnline, model, config, dat
   const [autopilotBusy, setAutopilotBusy] = React.useState(false);
   const [autopilotError, setAutopilotError] = React.useState("");
   const autopilotRequestId = React.useRef(0);
+  const stockRequestId = React.useRef(0);
+  const researchRequestId = React.useRef(0);
+  const insiderRequestId = React.useRef(0);
   const [priceHistory, setPriceHistory] = React.useState<StockHistory | null>(null);
   const [researchSummary, setResearchSummary] = React.useState<any>(null);
   const [researchError, setResearchError] = React.useState("");
   const [insiderActivity, setInsiderActivity] = React.useState<any>(null);
   const [insiderError, setInsiderError] = React.useState("");
   const [showResearchTools, setShowResearchTools] = React.useState(false);
+  const { bookmarks, syncStatus, removeBookmark, toggleBookmark, moveBookmark, reorderBookmark } = useStockBookmarks();
 
   const readyTickers = model.readyTickers || [];
   const modelReady = Object.keys(model.settings).length > 0;
   const sliderMin = Math.min(maxCutoff, 70 + Math.round(config.horizon));
   const testDateLabel = dateLabels[cutoffIndex] || stockResult?.date || "--";
 
-  const loadInsiders = React.useCallback(async (ticker: string) => {
+  const clearLoadedStock = React.useCallback(() => {
+    setActiveTicker("");
+    setPriceHistory(null);
+    setStockResult(null);
+    setAutopilotResult(null);
+    setAutopilotError("");
+    setAutopilotBusy(false);
+    setResearchSummary(null);
+    setResearchError("");
+    setInsiderActivity(null);
+    setInsiderError("");
+    setDateLabels([]);
+  }, []);
+
+  const loadInsiders = React.useCallback(async (ticker: string, parentRequestId = stockRequestId.current) => {
     if (!ticker) return;
+    const requestId = ++insiderRequestId.current;
     setInsiderActivity(null);
     setInsiderError("");
     try {
-      setInsiderActivity(await fetchInsiderActivity(ticker));
+      const activity = await fetchInsiderActivity(ticker);
+      if (requestId === insiderRequestId.current && parentRequestId === stockRequestId.current) {
+        setInsiderActivity(activity);
+      }
     } catch (err: any) {
-      setInsiderError(err.message);
+      if (requestId === insiderRequestId.current && parentRequestId === stockRequestId.current) {
+        setInsiderError(err.message);
+      }
     }
   }, []);
 
-  const loadResearchSummary = React.useCallback(async (ticker: string) => {
+  const loadResearchSummary = React.useCallback(async (ticker: string, parentRequestId = stockRequestId.current) => {
     if (!ticker) return;
+    const requestId = ++researchRequestId.current;
     setResearchSummary(null);
     setResearchError("");
     try {
-      setResearchSummary(await fetchStockResearch(ticker));
+      const summary = await fetchStockResearch(ticker);
+      if (requestId === researchRequestId.current && parentRequestId === stockRequestId.current) {
+        setResearchSummary(summary);
+      }
     } catch (err: any) {
-      setResearchError(err.message);
+      if (requestId === researchRequestId.current && parentRequestId === stockRequestId.current) {
+        setResearchError(err.message);
+      }
     }
   }, []);
 
-  const applyDatasetMeta = async (ticker: string) => {
+  const applyDatasetMeta = async (ticker: string, parentRequestId = stockRequestId.current) => {
     const meta = await fetchDatasetMeta(ticker);
+    if (parentRequestId !== stockRequestId.current) return;
     setDateLabels(meta.dates || []);
     setMaxCutoff(meta.maxCutoff);
     const min = Math.min(meta.maxCutoff, 70 + Math.round(config.horizon));
@@ -193,46 +229,35 @@ export default function StockView({ aiEnabled, backendOnline, model, config, dat
   const loadTicker = async (symbol = tickerInput) => {
     const ticker = (symbol || "").trim().toUpperCase();
     if (!ticker) return;
+    const requestId = ++stockRequestId.current;
+    ++autopilotRequestId.current;
+    ++researchRequestId.current;
+    ++insiderRequestId.current;
     setBusy("fetch");
     setError("");
-    setPriceHistory(null);
-    setStockResult(null);
-    setAutopilotResult(null);
+    setTickerInput(ticker);
+    clearLoadedStock();
     try {
       const fetched = await fetchStock({ ticker, years: 10, provider: "auto" });
       const history = await fetchStockHistory(ticker);
+      if (requestId !== stockRequestId.current) return;
       setPriceHistory({ ...history, provider: fetched.provider });
       setActiveTicker(ticker);
       setTickerInput(ticker);
-      await applyDatasetMeta(ticker);
-      loadInsiders(ticker);
-      void loadResearchSummary(ticker);
+      await applyDatasetMeta(ticker, requestId);
+      if (requestId !== stockRequestId.current) return;
+      void loadInsiders(ticker, requestId);
+      void loadResearchSummary(ticker, requestId);
       void runAutopilotAction(ticker, false);
     } catch (err: any) {
-      setError(err.message);
+      if (requestId === stockRequestId.current) setError(err.message);
     } finally {
-      setBusy("");
+      if (requestId === stockRequestId.current) setBusy("");
     }
   };
 
   const onActiveTickerChange = async (ticker: string) => {
-    if (!ticker) return;
-    const symbol = ticker.toUpperCase();
-    setActiveTicker(symbol);
-    setTickerInput(symbol);
-    setPriceHistory(null);
-    setStockResult(null);
-    setAutopilotResult(null);
-    try {
-      const history = await fetchStockHistory(symbol);
-      setPriceHistory(history);
-      await applyDatasetMeta(symbol);
-      loadInsiders(symbol);
-      void loadResearchSummary(symbol);
-      void runAutopilotAction(symbol, true);
-    } catch (err: any) {
-      setError(err.message);
-    }
+    if (ticker) await loadTicker(ticker);
   };
 
   return (
@@ -266,7 +291,30 @@ export default function StockView({ aiEnabled, backendOnline, model, config, dat
           >
             {busy === "fetch" ? "Loading market data…" : "Analyze"}
           </Button>
+          {activeTicker && (
+            <Button
+              variant={bookmarks.includes(activeTicker) ? "contained" : "outlined"}
+              color="inherit"
+              startIcon={bookmarks.includes(activeTicker) ? <BookmarkIcon /> : <BookmarkBorderIcon />}
+              onClick={() => toggleBookmark(activeTicker)}
+              aria-label={bookmarks.includes(activeTicker) ? `Remove ${activeTicker} bookmark` : `Bookmark ${activeTicker}`}
+              sx={{ minWidth: 142, height: 56, borderRadius: 3 }}
+            >
+              {bookmarks.includes(activeTicker) ? "Saved" : "Bookmark"}
+            </Button>
+          )}
         </Stack>
+        {bookmarks.length > 0 && (
+          <SavedStockCards
+            tickers={bookmarks}
+            activeTicker={activeTicker}
+            syncStatus={syncStatus}
+            onOpen={(ticker) => void loadTicker(ticker)}
+            onRemove={removeBookmark}
+            onMove={moveBookmark}
+            onReorder={reorderBookmark}
+          />
+        )}
       </Box>
 
       {priceHistory && (
@@ -418,9 +466,9 @@ export default function StockView({ aiEnabled, backendOnline, model, config, dat
             <MetricCard
               icon={AccountBalanceIcon}
               color="error"
-              label="Options edge"
+              label="Options move gap"
               value={stockResult.options?.available ? pct(stockResult.movementEdge) : "--"}
-              note={stockResult.options?.available ? `Implied: ${pct(stockResult.impliedMove)}` : "No authorized live chain"}
+              note={stockResult.options?.available ? (stockResult.tradePlan?.action === "No trade" ? "No-trade safeguard active" : `Implied: ${pct(stockResult.impliedMove)}`) : "No authorized live chain"}
             />
           </Box>
 
@@ -439,7 +487,7 @@ export default function StockView({ aiEnabled, backendOnline, model, config, dat
               </Box>
               {stockResult.walkForward?.hit_rate_ci_95 && (
                 <Alert severity="info" icon={false} sx={{ mb: 2 }}>
-                  95% hit-rate interval: {pct(stockResult.walkForward.hit_rate_ci_95[0])}–{pct(stockResult.walkForward.hit_rate_ci_95[1])}. Positions do not overlap; the prediction horizon is purged between train and test.
+                  Out-of-sample walk-forward results use a purged, non-overlapping sample and may differ from the ticker signal-screen history shown in the trade plan. 95% hit-rate interval: {pct(stockResult.walkForward.hit_rate_ci_95[0])}–{pct(stockResult.walkForward.hit_rate_ci_95[1])}.
                 </Alert>
               )}
               <EquityCurve trades={stockResult.backtest?.trades} />

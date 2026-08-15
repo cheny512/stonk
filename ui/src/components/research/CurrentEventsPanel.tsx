@@ -17,6 +17,8 @@ interface CurrentEventsPanelProps {
     items: NewsItem[];
     message?: string;
     retrievedAt?: string;
+    discardedCount?: number;
+    relevanceMethod?: string;
   };
 }
 
@@ -28,7 +30,7 @@ export function CurrentEventsPanel({ events }: CurrentEventsPanelProps) {
   return (
     <Stack spacing={1.5}>
       <Typography variant="caption" color="text.secondary">
-        Aggregator: {events.provider}{events.retrievedAt ? ` · retrieved ${new Date(events.retrievedAt).toLocaleString()}` : ""}. Verify material claims against the linked primary source.
+        Aggregator: {events.provider}{events.retrievedAt ? ` · retrieved ${new Date(events.retrievedAt).toLocaleString()}` : ""}. Ticker-specific relevance filter applied{events.discardedCount ? `; ${events.discardedCount} unrelated result${events.discardedCount === 1 ? "" : "s"} hidden` : ""}. Verify material claims against the linked primary source.
       </Typography>
       {events.items.map((item, index) => (
         <Paper key={index} variant="outlined" sx={{ p: 2, "&:hover": { bgcolor: "rgba(0,0,0,0.01)" } }}>

@@ -1,5 +1,5 @@
 from market_predictor.data import PriceRow
-from market_predictor.stock_research import build_history_summary
+from market_predictor.stock_research import _news_relevance, build_history_summary
 
 
 def _rows(count=300):
@@ -33,3 +33,12 @@ def test_history_summary_includes_research_metrics():
     assert summary["indicators"]["rsi14"] is not None
     assert summary["analysis"]["trend"] in {"uptrend", "downtrend", "mixed"}
     assert summary["analysis"]["observations"]
+
+
+def test_news_relevance_requires_the_ticker_or_company_name():
+    assert _news_relevance("NVDA", "NVIDIA Corporation", "Nvidia launches a new accelerator", None) == "company"
+    assert _news_relevance("NVDA", "NVIDIA Corporation", "Analyst raises $NVDA target", None) == "ticker"
+    assert _news_relevance("NVDA", "NVIDIA Corporation", "Berkshire increases its Alphabet stake", "Google moved higher") is None
+    assert _news_relevance("A", "Agilent Technologies, Inc.", "Markets rally after a volatile session", None) is None
+    assert _news_relevance("A", "Agilent Technologies, Inc.", "Agilent launches a new instrument", None) == "company"
+    assert _news_relevance("T", "AT&T Inc.", "AT&T expands its fiber footprint", None) == "company"

@@ -119,8 +119,14 @@ export interface OptionsChain {
   underlying: string;
   asOf: string;
   spot?: number;
-  quotes: OptionQuote[];
+  quotes?: OptionQuote[];
+  contracts?: OptionQuote[];
   provider: string;
+  medianIv?: number | null;
+  analysisIv?: number;
+  ivSource?: "observed-contract-median" | "scenario-assumption";
+  tradeEligible?: boolean;
+  screeningNote?: string;
 }
 
 export interface BacktestTrade {
@@ -172,12 +178,17 @@ export interface TradePlan {
   resistance20d: number;
   atr14: number;
   estimatedRiskReward?: number;
+  rejectionReasons?: string[];
   exitRules: string[];
   evidence: {
     backtestHitRate: number;
     backtestSignals: number;
+    profitFactor: number;
     evidenceSufficient: boolean;
     historicallyValidated: boolean;
+    minimumHitRate: number;
+    minimumProfitFactor: number;
+    minimumRiskReward: number;
   };
   riskNote: string;
 }

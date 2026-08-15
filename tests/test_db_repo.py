@@ -4,7 +4,14 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from market_predictor.db.models import Base
-from market_predictor.db.repo import upsert_bars, get_bars
+from market_predictor.db.repo import (
+    create_anonymous_user,
+    get_bars,
+    get_user_by_access_token,
+    get_watchlist_symbols,
+    replace_watchlist_symbols,
+    upsert_bars,
+)
 from market_predictor.data import PriceRow
 
 @pytest.fixture
@@ -50,3 +57,22 @@ def test_get_bars_range(db_session):
     retrieved = get_bars(db_session, ticker, start="2024-01-02", end="2024-01-02")
     assert len(retrieved) == 1
     assert retrieved[0].date == "2024-01-02"
+
+
+def test_anonymous_user_token_and_ordered_watchlist(db_session):
+    user, access_token = create_anonymous_user(db_session, timezone="America/New_York")
+
+    assert access_token
+    assert user.access_token_hash != access_token
+    assert get_user_by_access_token(db_session, access_token).public_id == user.public_id
+    assert get_user_by_access_token(db_session, "invalid-token") is None
+
+    saved = replace_watchlist_symbols(db_session, user.id, [" msft ", "AAPL", "MSFT", "$$$"])
+
+    assert saved == ["MSFT", "AAPL"]
+    assert get_watchlist_symbols(db_session, user.id) == ["MSFT", "AAPL"]
+
+    reordered = replace_watchlist_symbols(db_session, user.id, ["AAPL", "MSFT"])
+
+    assert reordered == ["AAPL", "MSFT"]
+    assert get_watchlist_symbols(db_session, user.id) == ["AAPL", "MSFT"]

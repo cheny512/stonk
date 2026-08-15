@@ -83,3 +83,36 @@ def test_options_screen_uses_volume_when_open_interest_is_unavailable():
     assert result["filters"]["openInterestApplied"] is False
     assert result["filters"]["volumeApplied"] is True
     assert "Open interest was unavailable" in result["methodology"]
+
+
+def test_options_screen_labels_iv_assumption_when_contract_iv_is_unavailable():
+    quote = _quote("EOD-NO-IV", bid=4.8, ask=5.2, oi=500, volume=100)
+    quote = OptionQuote(
+        symbol=quote.symbol,
+        underlying=quote.underlying,
+        expiration=quote.expiration,
+        strike=quote.strike,
+        right=quote.right,
+        bid=quote.bid,
+        ask=quote.ask,
+        mid=quote.mid,
+        implied_vol=None,
+        delta=None,
+        open_interest=quote.open_interest,
+        volume=quote.volume,
+    )
+    chain = OptionsChain(
+        underlying="AAPL",
+        as_of="2026-08-14",
+        spot=200,
+        provider="thetadata",
+        quotes=[quote],
+    )
+
+    result = recommend_option_contracts(chain, 0.65, 0.03, 0.04, 5)
+
+    assert result["available"] is True
+    assert result["medianIv"] is None
+    assert result["analysisIv"] == 0.35
+    assert result["ivSource"] == "scenario-assumption"
+    assert "scenario assumption" in result["methodology"]

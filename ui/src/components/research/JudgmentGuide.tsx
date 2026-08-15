@@ -25,6 +25,7 @@ export function JudgmentGuide({ research, result }: { research?: any; result?: a
   const events = research.events?.items || [];
   const backtest = result?.backtest || {};
   const options = result?.options;
+  const optionIvObserved = options?.ivSource === "observed-contract-median" && present(options?.medianIv);
   const trend = indicators.trend || "unknown";
 
   const growthParts = [
@@ -104,10 +105,10 @@ export function JudgmentGuide({ research, result }: { research?: any; result?: a
     },
     {
       title: "Options expectations",
-      status: options?.available ? "Live chain available" : "Chain unavailable",
-      color: options?.available ? "success" : "warning",
+      status: options?.available ? (options.tradeEligible === false ? "Informational only" : "Live chain available") : "Chain unavailable",
+      color: options?.available && options.tradeEligible !== false ? "success" : "warning",
       observation: options?.available
-        ? `${String(options.side || "neutral")} setup · median IV ${pct(options.medianIv)} · target expiration ${options.targetExpiration}.`
+        ? `${options.tradeEligible === false ? "No-trade safeguard active · " : ""}${String(options.side || "neutral")} setup · ${optionIvObserved ? `observed median IV ${pct(options.medianIv)}` : `scenario IV assumption ${pct(options.analysisIv)} (contract IV unavailable)`} · target expiration ${options.targetExpiration}.`
         : "No authorized live options chain is available for comparison.",
       lesson: "Options encode volatility and positioning, not certain direction. Compare implied versus expected movement, spreads, liquidity, time decay, and maximum loss.",
     },

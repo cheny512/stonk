@@ -22,7 +22,9 @@ async function request(path, { method = "GET", body, params, headers } = {}) {
     } catch {
       /* ignore */
     }
-    throw new Error(detail);
+    const error = new Error(detail);
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -33,6 +35,33 @@ export function fetchHealth() {
 
 export function fetchAiHealth() {
   return request("/ai/health");
+}
+
+export function createAnonymousProfile(timezone = "UTC") {
+  return request("/users/anonymous", {
+    method: "POST",
+    body: { timezone },
+  });
+}
+
+export function fetchProfile(accessToken) {
+  return request("/users/me", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export function fetchSavedStocks(accessToken) {
+  return request("/users/me/watchlist", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+}
+
+export function saveSavedStocks(accessToken, tickers) {
+  return request("/users/me/watchlist", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: { tickers },
+  });
 }
 
 export function fetchIndicators() {

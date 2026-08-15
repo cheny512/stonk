@@ -127,14 +127,15 @@ def recommend_option_contracts(
 
     candidates.sort(key=strike_score)
 
-    iv = median_iv or 0.35
+    analysis_iv = median_iv or 0.35
+    iv_source = "observed-contract-median" if median_iv is not None else "scenario-assumption"
     dte = _dte_days(best_exp, chain.as_of)
     setup = score_options_setup(
         probability_up=probability_up,
         predicted_return=predicted_return,
         realized_abs_move_pct=expected_move_pct,
         days_to_expiry=dte,
-        implied_vol=iv,
+        implied_vol=analysis_iv,
         confidence=confidence,
     )
 
@@ -173,7 +174,9 @@ def recommend_option_contracts(
         "spot": spot,
         "targetExpiration": best_exp,
         "targetDte": dte,
-        "medianIv": iv,
+        "medianIv": median_iv,
+        "analysisIv": analysis_iv,
+        "ivSource": iv_source,
         "side": side,
         "setup": asdict(setup),
         "contracts": contracts,
@@ -188,6 +191,11 @@ def recommend_option_contracts(
         "methodology": (
             "Educational liquidity screen ranked by target-strike distance, spread, and available liquidity fields. "
             + ("Open interest was enforced." if open_interest_available else "Open interest was unavailable and was not used.")
+            + (
+                " Implied volatility uses the observed median across returned contracts."
+                if median_iv is not None
+                else " Contract implied volatility was unavailable; a labeled 35% scenario assumption was used only for the movement comparison."
+            )
         ),
         "riskDisclosure": "This is not a personalized recommendation. Long options can lose 100% of premium; quotes can change before execution.",
     }
@@ -211,7 +219,7 @@ def attach_options_to_signal(
         confidence=confidence,
     )
     signal["options"] = rec
-    if rec.get("medianIv"):
+    if rec.get("setup"):
         signal["impliedMove"] = rec["setup"]["implied_move_pct"]
         signal["movementEdge"] = rec["setup"]["movement_edge_pct"]
     return signal

@@ -23,6 +23,7 @@ export function AutopilotPlan({ result, loading, error }: AutopilotPlanProps) {
 
   const plan = result.tradePlan;
   const thesis = result.thesis;
+  const noTrade = plan.action === "No trade";
   const actionColor = plan.action === "No trade" ? "default" : plan.evidence?.historicallyValidated ? "success" : "warning";
 
   return (
@@ -40,8 +41,19 @@ export function AutopilotPlan({ result, loading, error }: AutopilotPlanProps) {
         <Chip label={plan.action} color={actionColor as any} sx={{ alignSelf: { xs: "flex-start", sm: "center" } }} />
       </Stack>
 
+      {noTrade && plan.rejectionReasons?.length > 0 && (
+        <Alert severity="warning">
+          <Typography fontWeight={800}>No entry passed the evidence safeguards.</Typography>
+          <Stack component="ul" spacing={0.5} sx={{ pl: 2.5, mb: 0.25, mt: 0.75 }}>
+            {plan.rejectionReasons.map((reason: string) => (
+              <Typography component="li" variant="body2" key={reason}>{reason}</Typography>
+            ))}
+          </Stack>
+        </Alert>
+      )}
+
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, 1fr)", md: "repeat(4, 1fr)" }, gap: 1.5 }}>
-        <MetricMini label="Entry zone" value={`${money(plan.entryZone.low, 2)}–${money(plan.entryZone.high, 2)}`} />
+        <MetricMini label={noTrade ? "Reference zone" : "Entry zone"} value={`${money(plan.entryZone.low, 2)}–${money(plan.entryZone.high, 2)}`} />
         <MetricMini label="Invalidation" value={money(plan.invalidation, 2)} color="error" />
         <MetricMini label="First target" value={money(plan.targets?.[0], 2)} color="success" />
         <MetricMini label="Risk / reward" value={plan.estimatedRiskReward ? `${fmt(plan.estimatedRiskReward, 2)}×` : "--"} />
@@ -82,7 +94,7 @@ export function AutopilotPlan({ result, loading, error }: AutopilotPlanProps) {
           {thesis.evidence.map((item: string) => <Typography component="li" variant="body2" color="text.secondary" key={item}>{item}</Typography>)}
         </Stack>
         <Typography variant="caption" color="text.secondary">
-          Backtest: {pct(plan.evidence.backtestHitRate)} hit rate across {plan.evidence.backtestSignals} signals. {thesis.methodology}
+          Ticker signal-screen history: {pct(plan.evidence.backtestHitRate)} hit rate, {fmt(plan.evidence.profitFactor, 2)} profit factor, across {plan.evidence.backtestSignals} signals. {thesis.methodology}
         </Typography>
       </Box>
       <Alert severity="warning">{plan.riskNote} {thesis.disclaimer}</Alert>

@@ -24,8 +24,8 @@ def _signal() -> dict:
     return {
         "bias": "Bullish",
         "probabilityUp": 0.63,
-        "expectedMove": 0.035,
-        "backtest": {"hitRate": 0.58, "signalCount": 42},
+        "expectedMove": 0.12,
+        "backtest": {"hitRate": 0.58, "signalCount": 42, "profitFactor": 1.4},
     }
 
 
@@ -38,6 +38,19 @@ def test_trade_plan_has_entry_invalidation_targets_and_evidence():
     assert plan["targets"][0] > plan["entryZone"]["low"]
     assert plan["evidence"]["historicallyValidated"] is True
     assert len(plan["exitRules"]) == 3
+
+
+def test_trade_plan_refuses_weak_or_unattractive_setups():
+    signal = _signal()
+    signal["expectedMove"] = 0.01
+    signal["backtest"] = {"hitRate": 0.48, "signalCount": 42, "profitFactor": 0.8}
+
+    plan = build_trade_plan(_rows(), signal, horizon=5)
+
+    assert plan["action"] == "No trade"
+    assert plan["rejectionReasons"]
+    assert plan["evidence"]["historicallyValidated"] is False
+    assert "No entry" in plan["entryCondition"]
 
 
 def test_rules_thesis_uses_measured_evidence_without_ai():

@@ -41,8 +41,9 @@ def build_trade_plan(rows: list[PriceRow], signal: dict[str, Any], horizon: int)
     backtest = signal.get("backtest") or {}
     hit_rate = float(backtest.get("hitRate") or 0.0)
     signal_count = int(backtest.get("signalCount") or 0)
+    profit_factor = float(backtest.get("profitFactor") or 0.0)
     enough_evidence = signal_count >= 20
-    validated = enough_evidence and hit_rate >= 0.52
+    validated = enough_evidence and hit_rate >= 0.52 and profit_factor >= 1.0
 
     if bias == "Bullish":
         entry_low = max(support, min(spot, sma20) - 0.35 * atr)
@@ -51,7 +52,7 @@ def build_trade_plan(rows: list[PriceRow], signal: dict[str, Any], horizon: int)
         target_one = max(resistance, spot + max(expected_move, atr))
         target_two = spot + max(expected_move * 1.75, atr * 2.0)
         entry_condition = "Enter only after price holds the entry zone or closes above the prior session high on healthy volume."
-        action = "Consider long" if validated else "Watch for confirmation"
+        action = "Consider long"
     elif bias == "Bearish":
         entry_low = spot - 0.15 * atr
         entry_high = min(resistance, max(spot, sma20) + 0.35 * atr)
@@ -59,7 +60,7 @@ def build_trade_plan(rows: list[PriceRow], signal: dict[str, Any], horizon: int)
         target_one = min(support, spot - max(expected_move, atr))
         target_two = spot - max(expected_move * 1.75, atr * 2.0)
         entry_condition = "Enter only after price rejects the entry zone or closes below the prior session low on healthy volume."
-        action = "Consider bearish" if validated else "Watch for confirmation"
+        action = "Consider bearish"
     else:
         entry_low = support
         entry_high = resistance
@@ -71,6 +72,26 @@ def build_trade_plan(rows: list[PriceRow], signal: dict[str, Any], horizon: int)
 
     risk = abs(((entry_low + entry_high) / 2.0) - invalidation)
     reward = abs(target_one - ((entry_low + entry_high) / 2.0))
+    risk_reward = reward / risk if risk > 0 else None
+    rejection_reasons: list[str] = []
+    if bias == "Neutral":
+        rejection_reasons.append("The model has no directional edge.")
+    if not enough_evidence:
+        rejection_reasons.append(f"Only {signal_count} qualifying historical signals are available; at least 20 are required.")
+    elif hit_rate < 0.52:
+        rejection_reasons.append(f"The historical hit rate is {hit_rate:.1%}, below the 52% evidence threshold.")
+    if enough_evidence and profit_factor < 1.0:
+        rejection_reasons.append(f"The historical profit factor is {profit_factor:.2f}, below the 1.00 break-even threshold.")
+    if risk_reward is None or risk_reward < 1.5:
+        rejection_reasons.append(
+            "The measured reward-to-risk is unavailable."
+            if risk_reward is None
+            else f"The measured reward-to-risk is {risk_reward:.2f}x, below the 1.50x minimum."
+        )
+    if rejection_reasons:
+        action = "No trade"
+        entry_condition = "No entry is supported by the current evidence. Reassess only after the failed safeguards improve."
+
     return {
         "action": action,
         "bias": bias,
@@ -83,7 +104,8 @@ def build_trade_plan(rows: list[PriceRow], signal: dict[str, Any], horizon: int)
         "support20d": _price(support),
         "resistance20d": _price(resistance),
         "atr14": _price(atr),
-        "estimatedRiskReward": round(reward / risk, 2) if risk > 0 else None,
+        "estimatedRiskReward": round(risk_reward, 2) if risk_reward is not None else None,
+        "rejectionReasons": rejection_reasons,
         "exitRules": [
             "Exit if the daily close crosses the invalidation level.",
             f"Reassess after {horizon} trading sessions even if neither target nor invalidation is reached.",
@@ -92,8 +114,12 @@ def build_trade_plan(rows: list[PriceRow], signal: dict[str, Any], horizon: int)
         "evidence": {
             "backtestHitRate": hit_rate,
             "backtestSignals": signal_count,
+            "profitFactor": profit_factor,
             "evidenceSufficient": enough_evidence,
             "historicallyValidated": validated,
+            "minimumHitRate": 0.52,
+            "minimumProfitFactor": 1.0,
+            "minimumRiskReward": 1.5,
         },
         "riskNote": "Levels are a research framework, not guaranteed fills or personalized financial advice.",
     }
