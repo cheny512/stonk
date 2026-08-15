@@ -29,3 +29,7 @@ def test_history_summary_includes_research_metrics():
     assert summary["volatility"]["realized20d"] is not None
     assert summary["volume"]["relativeVolume20d"] is not None
     assert 0 <= summary["volume"]["buyPressure20d"] <= 1
+    assert summary["indicators"]["sma50"] is not None
+    assert summary["indicators"]["rsi14"] is not None
+    assert summary["analysis"]["trend"] in {"uptrend", "downtrend", "mixed"}
+    assert summary["analysis"]["observations"]

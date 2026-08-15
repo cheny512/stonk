@@ -18,7 +18,7 @@ async function request(path, { method = "GET", body, params, headers } = {}) {
     let detail = response.statusText;
     try {
       const payload = await response.json();
-      detail = payload.detail || JSON.stringify(payload);
+      detail = payload.error?.message || payload.detail || JSON.stringify(payload);
     } catch {
       /* ignore */
     }
@@ -144,8 +144,41 @@ export function fetchStockQuote(ticker) {
   return request(`/stock/${encodeURIComponent(ticker)}/quote`);
 }
 
+export function fetchStockHistory(ticker) {
+  return request(`/stock/${encodeURIComponent(ticker)}/history`);
+}
+
 export function fetchStockResearch(ticker) {
   return request(`/stock/${encodeURIComponent(ticker)}/research`);
+}
+
+export function runStockAutopilot(ticker, {
+  refresh = true,
+  years = 10,
+  provider = "auto",
+  horizon = 5,
+  confidence = 0.56,
+  dte = 21,
+  iv = 0.45,
+  tradeCost = 0.001,
+  trainFraction = 0.7,
+  includeOptions = true,
+} = {}) {
+  return request(`/stock/${encodeURIComponent(ticker)}/autopilot`, {
+    method: "POST",
+    body: {
+      refresh,
+      years,
+      provider,
+      horizon,
+      confidence,
+      dte,
+      iv,
+      trade_cost: tradeCost,
+      train_fraction: trainFraction,
+      include_options: includeOptions,
+    },
+  });
 }
 
 export function fetchSynthesis(ticker) {

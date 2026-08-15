@@ -2,6 +2,10 @@ __pycache__/
 *.pyc
 .DS_Store
 *.csv
+.coverage
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 node_modules/
 dist/
 .env
@@ -16,3 +20,7 @@ data/*
 !data/equity/custom/
 !data/equity/custom/.gitkeep
 !.gitkeep
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+evals/report.md

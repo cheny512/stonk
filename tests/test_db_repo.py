@@ -11,8 +11,11 @@ from market_predictor.data import PriceRow
 def db_session():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
-    with Session(engine) as session:
-        yield session
+    try:
+        with Session(engine) as session:
+            yield session
+    finally:
+        engine.dispose()
 
 def test_upsert_and_get_bars(db_session):
     ticker = "TEST"

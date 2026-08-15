@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from "@mui/material";
+import { Alert, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
 import { OptionsChain } from "../../types";
 import { fmt, pct } from "../../lib/format";
 
@@ -7,12 +7,16 @@ export function OptionsContracts({ options }: { options?: OptionsChain }) {
   if (!options?.available) {
     return <Alert severity="info">{options?.message || "No options chain available for this signal."}</Alert>;
   }
+  const contracts = (options as any).contracts || options.quotes || [];
   return (
     <Stack spacing={2}>
       <Alert severity="success">
-        {(options as any).side?.toUpperCase()} bias · exp {(options as any).targetExpiration} · IV{" "}
-        {pct((options as any).medianIv)} · {(options as any).setup?.setup}
+        Educational screen · {(options as any).side?.toUpperCase()} scenario · exp {(options as any).targetExpiration} · IV{" "}
+        {pct((options as any).medianIv)}
       </Alert>
+      <Typography variant="caption" color="text.secondary">
+        {(options as any).methodology} {(options as any).riskDisclosure}
+      </Typography>
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">
           <TableHead>
@@ -23,17 +27,19 @@ export function OptionsContracts({ options }: { options?: OptionsChain }) {
               <TableCell align="right">IV</TableCell>
               <TableCell align="right">Delta</TableCell>
               <TableCell align="right">OI</TableCell>
+              <TableCell align="right">Max loss</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {(options.quotes || []).map((contract) => (
+            {contracts.map((contract: any) => (
               <TableRow key={`${contract.symbol}-${contract.strike}`}>
-                <TableCell>{contract.right.toUpperCase()}</TableCell>
+                <TableCell>{String(contract.right || contract.type).toUpperCase()}</TableCell>
                 <TableCell align="right">{fmt(contract.strike)}</TableCell>
                 <TableCell align="right">{fmt(contract.mid)}</TableCell>
                 <TableCell align="right">{pct(contract.impliedVol)}</TableCell>
                 <TableCell align="right">{fmt(contract.delta, 2)}</TableCell>
-                <TableCell align="right">{contract.volume != null ? Math.round(contract.volume) : "--"}</TableCell>
+                <TableCell align="right">{contract.openInterest != null ? Math.round(contract.openInterest) : "--"}</TableCell>
+                <TableCell align="right">{fmt(contract.maxLoss)}</TableCell>
               </TableRow>
             ))}
           </TableBody>

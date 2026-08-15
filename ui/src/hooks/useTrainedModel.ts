@@ -23,7 +23,7 @@ export function useTrainedModel(backendOnline: boolean) {
       setTrainMethod(trained.method || "autonomous");
       setStatus(`Loaded global model (${trained.totalRows || 0} samples)`);
     } catch {
-      setStatus("API connected. No saved model loaded yet.");
+      setStatus("Ready · Autopilot trains a model per ticker");
     }
   }, [backendOnline]);
 

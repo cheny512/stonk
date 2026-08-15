@@ -35,6 +35,9 @@ def recommend_option_contracts(
     horizon_days: int,
     confidence: float = 0.56,
     max_results: int = 8,
+    max_spread_pct: float = 0.25,
+    min_open_interest: float = 50,
+    min_volume: float = 1,
 ) -> dict[str, Any]:
     spot = chain.spot or 0.0
     quotes = chain.quotes
@@ -76,6 +79,36 @@ def recommend_option_contracts(
     candidates = [q for q in bucket if q.right.lower() in right_filter]
     if not candidates:
         candidates = bucket
+
+    def quote_spread_pct(q: OptionQuote) -> float:
+        mid = q.mid if q.mid > 0 else (q.bid + q.ask) / 2
+        return (q.ask - q.bid) / mid if mid > 0 and q.ask >= q.bid else math.inf
+
+    liquid_candidates = [
+        quote
+        for quote in candidates
+        if quote.bid > 0
+        and quote.ask >= quote.bid
+        and quote_spread_pct(quote) <= max_spread_pct
+        and (quote.open_interest or 0) >= min_open_interest
+        and (quote.volume or 0) >= min_volume
+    ]
+    rejected_count = len(candidates) - len(liquid_candidates)
+    if not liquid_candidates:
+        return {
+            "available": False,
+            "provider": chain.provider,
+            "asOf": chain.as_of,
+            "message": "No contracts passed the spread, open-interest, and volume safeguards.",
+            "contracts": [],
+            "filters": {
+                "maxSpreadPct": max_spread_pct,
+                "minOpenInterest": min_open_interest,
+                "minVolume": min_volume,
+            },
+            "rejectedCount": rejected_count,
+        }
+    candidates = liquid_candidates
 
     def moneyness(q: OptionQuote) -> float:
         if spot <= 0:
@@ -122,6 +155,10 @@ def recommend_option_contracts(
                 "volume": q.volume,
                 "moneynessPct": moneyness(q),
                 "liquidityScore": (q.volume or 0) + (q.open_interest or 0) * 0.1,
+                "estimatedDebit": mid * 100,
+                "maxLoss": mid * 100,
+                "breakEven": q.strike + mid if q.right.lower() in {"call", "c"} else q.strike - mid,
+                "eligible": True,
             }
         )
 
@@ -136,6 +173,14 @@ def recommend_option_contracts(
         "side": side,
         "setup": asdict(setup),
         "contracts": contracts,
+        "filters": {
+            "maxSpreadPct": max_spread_pct,
+            "minOpenInterest": min_open_interest,
+            "minVolume": min_volume,
+        },
+        "rejectedCount": rejected_count,
+        "methodology": "Educational liquidity screen ranked by target-strike distance and observed volume/open interest.",
+        "riskDisclosure": "This is not a personalized recommendation. Long options can lose 100% of premium; quotes can change before execution.",
     }
 
 

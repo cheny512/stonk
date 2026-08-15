@@ -1,83 +1,103 @@
-# Stonk: Autonomous ML Trading & Agentic AI Analysis
+# Stonk
 
-Stonk is a comprehensive, full-stack AI Engineering and Quantitative Finance platform. It fuses traditional machine learning (XGBoost, SVM, Logistic Regression) with modern Agentic LLM orchestration (LangGraph, OpenAI Structured Outputs) to generate highly reliable, data-backed financial theses.
+Stonk is a local-first stock research workbench. It combines reproducible market-data analysis, point-in-time backtests, options context, sourced current events, and an optional AI research coach.
 
-## 🧠 System Architecture
+The product is intentionally split into two layers:
 
-This project is built on a **Monolithic Service + Sidecar AI Architecture**, bridging the gap between raw data processing and generative AI synthesis.
+- The deterministic layer calculates prices, indicators, model scores, backtests, entry/invalidation levels, and options liquidity metrics.
+- The explanation layer turns a versioned research packet into a bull case, bear case, uncertainties, and cited follow-up questions. It is optional and is never allowed to invent market data.
+
+Stonk is research software, not a broker, fiduciary, or personalized investment adviser. Options can lose 100% of their premium.
+
+## Architecture
 
 ```mermaid
-graph TD
-    UI[React / Vite UI] -->|REST| API(FastAPI Gateway)
-    
-    subgraph "Python Intelligence Engine"
-        API -->|Auto-Train| ML[ML Model Optimizer]
-        API -->|Fetch Data| Data[(Parquet / yfinance Data)]
-        ML -->|Weights| TrainedModel[(trained_model.json)]
-        
-        API -->|Synthesis Request| LangGraph[LangGraph State Machine]
-        LangGraph --> QuantNode[Quant Agent]
-        LangGraph --> EditorNode[Editor Agent]
-        
-        QuantNode -->|Calculates| TrainedModel
-        EditorNode -->|Synthesizes| QuantNode
-        EditorNode -->|RAG Context| Data
-    end
-    
-    EditorNode -->|Strict Pydantic JSON| LLM((OpenAI GPT-4o-mini))
-    
-    subgraph "Sidecar"
-        MCP[FastMCP Server] --> ML
-        MCP --> Data
-    end
+flowchart LR
+    Providers["Market, options, news providers"] --> Ingestion["Validated ingestion + provenance"]
+    Ingestion --> Store["CSV / Parquet / SQLite"]
+    Store --> Quant["Features + point-in-time validation"]
+    Quant --> Packet["Versioned ResearchPacket"]
+    Packet --> API["FastAPI"]
+    Packet --> Coach["Optional grounded AI provider"]
+    API --> UI["React research UI"]
+    Coach --> API
 ```
 
-### 1. Traditional ML Engine (Deterministic)
-Before any LLM touches the data, a deterministic ML pipeline calculates technical indicators (MACD, RSI, volatility metrics) and autonomous weights using Logistic Regression or XGBoost. It returns a strict probability of upward/downward movement based purely on historical math.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for boundaries, failure modes, and design decisions.
 
-### 2. Multi-Agent Orchestration (LangGraph)
-**Why LangGraph over direct API calls?**
-Passing an entire dataset to an LLM in a single zero-shot prompt leads to hallucinations and "lazy" processing. Instead, Stonk utilizes a **LangGraph State Machine**:
-*   **The Quant Node (Python):** Calculates the deterministic probabilities and formats the technicals.
-*   **The Editor Node (GPT-4o-mini):** Receives the structured quant output alongside recent real-world news, synthesizing them into a coherent `InvestmentThesis` using **Pydantic** to enforce strict JSON schemas.
+## What works without an AI key
 
-### 3. Automated Evaluations (LLM-as-a-Judge)
-To prevent model drift and ensure reliability, the `evals/` directory contains an automated testing pipeline. A smarter model (`gpt-4o`) grades the output of the Editor Agent against historical test cases, mathematically scoring the agent on Factual Consistency, Conviction Logic, and Hallucination Rates.
+- Historical and latest price charts
+- Technical, volatility, volume, and fundamental summaries
+- Chronological and purged walk-forward validation
+- Rules-based bull/base/bear thesis
+- Entry, invalidation, target, and exit scenarios
+- Options-chain ranking when a configured provider returns a chain
+- Current-event headlines with provider, URL, and publication time
 
-### 4. Model Context Protocol (MCP)
-The application exposes its intelligence engine via `scripts/mcp_server.py`. This allows external orchestrators (like Claude Desktop) to connect directly to the local ML model and data pipelines via standard `stdio` transport.
+AI is an optional research coach. Set `STONK_LLM_PROVIDER=local` to use an OpenAI-compatible local server such as Ollama or LM Studio, or `STONK_LLM_PROVIDER=openai` with a server-side API key. `disabled` is the safe default.
 
----
+## Local development
 
-## 🚀 Getting Started
+Requirements:
 
-The easiest way to run Stonk locally is using **Docker**.
+- Python 3.12+
+- Node 22.12+
 
-### Prerequisites
-*   [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-
-### One-Click Boot
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/stonk.git
+git clone https://github.com/cheny512/stonk.git
 cd stonk
-
-# Boot the entire stack (FastAPI Backend + React Frontend)
-docker-compose up --build
+cp .env.example .env
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+cd ui && npm ci && npm run dev
 ```
-*   **Frontend UI:** `http://localhost:5173`
-*   **Backend API:** `http://localhost:8000`
 
-### 🔑 OpenAI Integration
-The traditional ML models run 100% locally and completely free. 
-To enable the **AI Analyst Synthesis**, set the `OPENAI_API_KEY` environment variable in your `.env` file or `docker-compose.yml`. The system automatically detects the key and enables the LangGraph orchestration.
+Open the UI at [http://127.0.0.1:5173](http://127.0.0.1:5173). The API runs at [http://127.0.0.1:8000](http://127.0.0.1:8000); a 404 at the API root is expected. Health is available at `/api/health`.
 
+Alternatively:
 
----
+```bash
+docker compose up --build
+```
 
-## 📊 Roadmap: The AI Mastery Pipeline
+## Verification
 
-This project lays the groundwork for complete AI autonomy. The next phase of development focuses on the **Data Flywheel**:
-1.  **Synthetic Data Generation:** Run the Evals suite on thousands of historical stock events, saving only the perfect 5/5 theses to a dataset.
-2.  **Local Fine-Tuning:** Use LoRA to fine-tune an open-source model (e.g., Llama-3-8B) on the high-quality synthetic data.
-3.  **Complete Autonomy:** Swap out OpenAI for the local, fine-tuned model served via vLLM, resulting in a completely free, highly specialized financial agent.
+```bash
+.venv/bin/python -m pytest
+cd ui && npm run check
+```
+
+CI runs backend tests with coverage, frontend type checking, and a production build. The test suite does not require live provider credentials.
+
+## Data and model integrity
+
+- Features use only observations available on or before the scored date.
+- Walk-forward folds purge the prediction horizon between training and testing.
+- Non-overlapping trades are the default for horizon-return evaluation.
+- Results report signal count, calibration error, drawdown, benchmark return, and uncertainty around hit rate.
+- News and fundamentals are labeled with source and retrieval timestamps.
+- AI responses must cite evidence IDs from the research packet; unsupported citations are rejected.
+
+Known limitations are recorded in [ARCHITECTURE.md](ARCHITECTURE.md). In particular, free delayed providers are useful for research and demos but are not execution-grade feeds.
+
+## API
+
+FastAPI exposes interactive OpenAPI documentation at `http://127.0.0.1:8000/docs`.
+
+Long-running research can be submitted with an `Idempotency-Key` and polled:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/jobs/autopilot/AAPL \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: demo-aapl-1' \
+  -d '{"refresh": false, "include_options": false}'
+
+curl http://127.0.0.1:8000/api/jobs/JOB_ID
+```
+
+Job state is persisted in SQLite. An interrupted local worker marks unfinished work as interrupted on restart instead of silently reporting success.
+
+## Responsible use
+
+Confidence comes from traceable evidence and explicit uncertainty, not from a confident-sounding model. Never trade solely from this application. Verify data against primary sources and understand liquidity, tax, assignment, and loss risks before using options.

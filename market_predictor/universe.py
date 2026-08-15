@@ -88,11 +88,15 @@ def load_ticker_rows(ticker: str) -> list[PriceRow]:
     if os.environ.get("STONK_USE_SQLITE") == "1":
         from market_predictor.db.engine import get_engine, get_session_factory
         from market_predictor.db.repo import get_bars
-        session_factory = get_session_factory()
-        with session_factory() as session:
-            rows = get_bars(session, symbol)
-            if rows:
-                return rows
+        engine = get_engine()
+        try:
+            session_factory = get_session_factory(engine)
+            with session_factory() as session:
+                rows = get_bars(session, symbol)
+                if rows:
+                    return rows
+        finally:
+            engine.dispose()
     
     for path in (ticker_csv_path(symbol), custom_dir() / f"{symbol}.csv"):
         if path.exists():

@@ -87,6 +87,17 @@ export interface EquityBar {
   volume: number;
 }
 
+export interface StockHistory {
+  ticker: string;
+  provider?: string;
+  interval: "1d";
+  adjusted: boolean;
+  rows: number;
+  start: string;
+  end: string;
+  series: EquityBar[];
+}
+
 export interface OptionQuote {
   symbol: string;
   underlying: string;
@@ -141,6 +152,48 @@ export interface InvestmentThesis {
   bullCase: string;
   bearCase: string;
   sentimentScore: number;
+  uncertainties?: string[];
+  whatWouldChangeMyMind?: string[];
+  evidenceCitations?: string[];
+  provider?: string;
+  groundingStatus?: "grounded" | "deterministic" | "rejected";
+}
+
+export interface TradePlan {
+  action: string;
+  bias: string;
+  asOf: string;
+  horizonDays: number;
+  entryZone: { low: number; high: number };
+  entryCondition: string;
+  invalidation: number;
+  targets: number[];
+  support20d: number;
+  resistance20d: number;
+  atr14: number;
+  estimatedRiskReward?: number;
+  exitRules: string[];
+  evidence: {
+    backtestHitRate: number;
+    backtestSignals: number;
+    evidenceSufficient: boolean;
+    historicallyValidated: boolean;
+  };
+  riskNote: string;
+}
+
+export interface RulesThesis {
+  ticker: string;
+  stance: string;
+  conviction: "low" | "moderate" | "high";
+  summary: string;
+  bullCase: string;
+  baseCase: string;
+  bearCase: string;
+  evidence: string[];
+  currentEventHeadlines: string[];
+  methodology: string;
+  disclaimer: string;
 }
 
 export interface Dataset {

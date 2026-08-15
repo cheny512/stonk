@@ -18,7 +18,7 @@ def test_thetadata_fetch_bars():
         "status": 200
     }))
     
-    provider = ThetaDataProvider()
+    provider = ThetaDataProvider(username="test-user", password="test-password")
     # provider.fetch_equity_bars converts dates to ThetaData format
     bars = provider.fetch_equity_bars(ticker, "2024-01-01", "2024-01-01")
     

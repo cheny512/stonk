@@ -40,6 +40,25 @@ def _realized_vol(daily_returns: list[float], days: int) -> float | None:
     return sd * math.sqrt(252) if sd is not None else None
 
 
+def _simple_moving_average(rows: list[PriceRow], days: int) -> float | None:
+    if len(rows) < days:
+        return None
+    return _mean([row.close for row in rows[-days:]])
+
+
+def _rsi(rows: list[PriceRow], days: int = 14) -> float | None:
+    changes = [rows[i].close - rows[i - 1].close for i in range(1, len(rows))]
+    if len(changes) < days:
+        return None
+    recent = changes[-days:]
+    average_gain = _mean([max(change, 0.0) for change in recent]) or 0.0
+    average_loss = _mean([max(-change, 0.0) for change in recent]) or 0.0
+    if average_loss == 0:
+        return 100.0 if average_gain > 0 else 50.0
+    relative_strength = average_gain / average_loss
+    return 100.0 - (100.0 / (1.0 + relative_strength))
+
+
 def _avg_true_range(rows: list[PriceRow], days: int = 14) -> float | None:
     if len(rows) < 2:
         return None
@@ -97,6 +116,24 @@ def build_history_summary(rows: list[PriceRow]) -> dict[str, Any]:
         else:
             down_volume += rows[i].volume
     volume_total = up_volume + down_volume
+    sma20 = _simple_moving_average(rows, 20)
+    sma50 = _simple_moving_average(rows, 50)
+    sma200 = _simple_moving_average(rows, 200)
+    rsi14 = _rsi(rows, 14)
+    relative_volume = latest_volume / avg_volume_20 if avg_volume_20 else None
+    trend = "mixed"
+    if sma20 is not None and sma50 is not None:
+        trend = "uptrend" if latest.close > sma20 > sma50 else "downtrend" if latest.close < sma20 < sma50 else "mixed"
+
+    observations: list[str] = []
+    if sma50 is not None:
+        direction = "above" if latest.close >= sma50 else "below"
+        observations.append(f"Price is {direction} its 50-day average.")
+    if rsi14 is not None:
+        condition = "elevated" if rsi14 >= 70 else "depressed" if rsi14 <= 30 else "neutral"
+        observations.append(f"14-day RSI is {condition} at {rsi14:.1f}.")
+    if relative_volume is not None:
+        observations.append(f"Latest volume is {relative_volume:.1f}x its 20-day average.")
 
     return {
         "history": {
@@ -125,11 +162,24 @@ def build_history_summary(rows: list[PriceRow]) -> dict[str, Any]:
             "latestVolume": latest_volume,
             "average20d": avg_volume_20,
             "average60d": avg_volume_60,
-            "relativeVolume20d": latest_volume / avg_volume_20 if avg_volume_20 else None,
+            "relativeVolume20d": relative_volume,
             "volumeTrend20v60": avg_volume_20 / avg_volume_60 - 1.0 if avg_volume_20 and avg_volume_60 else None,
             "upVolume20d": up_volume,
             "downVolume20d": down_volume,
             "buyPressure20d": up_volume / volume_total if volume_total else None,
+        },
+        "indicators": {
+            "sma20": sma20,
+            "sma50": sma50,
+            "sma200": sma200,
+            "rsi14": rsi14,
+            "relativeVolume": relative_volume,
+            "trend": trend,
+        },
+        "analysis": {
+            "trend": trend,
+            "observations": observations,
+            "methodology": "Deterministic calculations from adjusted daily OHLCV history; no AI-generated prices.",
         },
     }
 
@@ -163,12 +213,19 @@ def _news_url(item: dict[str, Any]) -> str | None:
 
 
 def fetch_current_events(ticker: str, limit: int = 8) -> dict[str, Any]:
+    retrieved_at = datetime.now(timezone.utc).isoformat()
     try:
         import yfinance as yf
 
         raw_news = yf.Ticker(ticker).news or []
     except Exception as exc:
-        return {"available": False, "message": str(exc), "provider": "yfinance", "items": []}
+        return {
+            "available": False,
+            "message": str(exc),
+            "provider": "yfinance",
+            "retrievedAt": retrieved_at,
+            "items": [],
+        }
 
     items: list[dict[str, Any]] = []
     for item in raw_news[:limit]:
@@ -194,18 +251,20 @@ def fetch_current_events(ticker: str, limit: int = 8) -> dict[str, Any]:
     return {
         "available": bool(items),
         "provider": "yfinance",
+        "retrievedAt": retrieved_at,
         "items": items,
         "message": "" if items else "No current events returned for this ticker.",
     }
 
 
 def fetch_fundamentals(ticker: str) -> dict[str, Any]:
+    retrieved_at = datetime.now(timezone.utc).isoformat()
     try:
         import yfinance as yf
 
         info = yf.Ticker(ticker).get_info()
     except Exception as exc:
-        return {"available": False, "message": str(exc), "provider": "yfinance"}
+        return {"available": False, "message": str(exc), "provider": "yfinance", "retrievedAt": retrieved_at}
 
     keys = {
         "marketCap": "marketCap",
@@ -227,6 +286,7 @@ def fetch_fundamentals(ticker: str) -> dict[str, Any]:
     return {
         "available": True,
         "provider": "yfinance",
+        "retrievedAt": retrieved_at,
         "name": info.get("shortName") or info.get("longName") or ticker.upper(),
         "sector": info.get("sector"),
         "industry": info.get("industry"),
@@ -236,8 +296,17 @@ def fetch_fundamentals(ticker: str) -> dict[str, Any]:
 
 
 def build_stock_research(ticker: str, rows: list[PriceRow], include_fundamentals: bool = True) -> dict[str, Any]:
+    generated_at = datetime.now(timezone.utc).isoformat()
     return {
         "ticker": ticker.upper(),
+        "schemaVersion": "1.0",
+        "generatedAt": generated_at,
+        "dataAsOf": rows[-1].date,
+        "provenance": {
+            "price": "stored adjusted daily OHLCV",
+            "calculations": "stonk deterministic research engine",
+            "freshnessWarning": "Daily and aggregated feeds may be delayed; verify before acting.",
+        },
         **build_history_summary(rows),
         "fundamentals": fetch_fundamentals(ticker) if include_fundamentals else {"available": False},
         "events": fetch_current_events(ticker),

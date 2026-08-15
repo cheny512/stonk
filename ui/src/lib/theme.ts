@@ -3,7 +3,7 @@ import { createTheme } from "@mui/material";
 export const theme = createTheme({
   palette: {
     mode: "light",
-    background: { default: "#f8f9fa", paper: "#ffffff" },
+    background: { default: "#ffffff", paper: "#ffffff" },
     primary: { main: "#146c5c", light: "#208a74", dark: "#0e5245" },
     secondary: { main: "#1b2d4f", light: "#273f66", dark: "#0f1c32" },
     success: { main: "#168052", light: "#e8f5ed" },
@@ -28,7 +28,7 @@ export const theme = createTheme({
     MuiCard: { 
       styleOverrides: { 
         root: { 
-          boxShadow: "0 2px 12px rgba(0, 0, 0, 0.04)",
+          boxShadow: "none",
           border: "1px solid rgba(0, 0, 0, 0.08)",
           borderRadius: 16
         } 

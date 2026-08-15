@@ -4,8 +4,8 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 
 interface NewsItem {
   title: string;
-  summary: string;
-  time: string;
+  summary?: string;
+  published?: string;
   url?: string;
   publisher?: string;
 }
@@ -16,6 +16,7 @@ interface CurrentEventsPanelProps {
     provider: string;
     items: NewsItem[];
     message?: string;
+    retrievedAt?: string;
   };
 }
 
@@ -27,7 +28,7 @@ export function CurrentEventsPanel({ events }: CurrentEventsPanelProps) {
   return (
     <Stack spacing={1.5}>
       <Typography variant="caption" color="text.secondary">
-        Source: {events.provider}. Headlines are for research context, not trade instructions.
+        Aggregator: {events.provider}{events.retrievedAt ? ` · retrieved ${new Date(events.retrievedAt).toLocaleString()}` : ""}. Verify material claims against the linked primary source.
       </Typography>
       {events.items.map((item, index) => (
         <Paper key={index} variant="outlined" sx={{ p: 2, "&:hover": { bgcolor: "rgba(0,0,0,0.01)" } }}>
@@ -37,7 +38,7 @@ export function CurrentEventsPanel({ events }: CurrentEventsPanelProps) {
                 {item.title}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-                {item.time}
+                {[item.publisher, item.published].filter(Boolean).join(" · ")}
               </Typography>
             </Stack>
             <Typography variant="body2" color="text.secondary">

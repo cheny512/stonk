@@ -1,5 +1,5 @@
 import React from "react";
-import { Alert, Box, LinearProgress, Paper, Stack, Typography } from "@mui/material";
+import { Alert, Box, Chip, LinearProgress, Paper, Stack, Typography } from "@mui/material";
 import { fetchSynthesis } from "../../api/client";
 import { InvestmentThesis } from "../../types";
 
@@ -27,12 +27,20 @@ export function AiAnalystPanel({ ticker }: AiAnalystPanelProps) {
 
   return (
     <Stack spacing={2}>
-      {loading && <Alert severity="info" icon={false}><LinearProgress sx={{ mb: 2 }}/> Synthesizing AI thesis based on recent news and technicals...</Alert>}
+      {loading && <Alert severity="info" icon={false}><LinearProgress sx={{ mb: 2 }}/> Building a cited thesis from the current research packet...</Alert>}
       {error && !loading && <Alert severity="error">{error}</Alert>}
       {!loading && !error && synthesis && Object.keys(synthesis).length > 0 && (
         <>
-          <Typography variant="body1" sx={{ fontWeight: 500, fontStyle: "italic" }}>
-            "{synthesis.executiveSummary}"
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Chip
+              size="small"
+              color={synthesis.groundingStatus === "grounded" ? "success" : synthesis.groundingStatus === "rejected" ? "warning" : "default"}
+              label={synthesis.groundingStatus === "grounded" ? "Citations validated" : synthesis.groundingStatus === "rejected" ? "AI output rejected · rules fallback" : "Rules-based"}
+            />
+            <Chip size="small" variant="outlined" label={synthesis.provider || "deterministic"} />
+          </Stack>
+          <Typography variant="body1" sx={{ fontWeight: 600 }}>
+            {synthesis.executiveSummary}
           </Typography>
           
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
@@ -47,7 +55,7 @@ export function AiAnalystPanel({ ticker }: AiAnalystPanelProps) {
           </Stack>
           
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <Typography variant="overline" color="text.secondary" fontWeight={800}>Sentiment Score</Typography>
+            <Typography variant="overline" color="text.secondary" fontWeight={800}>Evidence-weighted outlook</Typography>
             <LinearProgress 
               variant="determinate" 
               value={((synthesis.sentimentScore || 5) / 10) * 100} 
@@ -61,6 +69,29 @@ export function AiAnalystPanel({ ticker }: AiAnalystPanelProps) {
             />
             <Typography fontWeight={850}>{synthesis.sentimentScore} / 10</Typography>
           </Box>
+
+          {!!synthesis.evidenceCitations?.length && (
+            <Box>
+              <Typography variant="overline" color="text.secondary" fontWeight={800}>Evidence used</Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap mt={0.5}>
+                {synthesis.evidenceCitations.map((citation) => <Chip key={citation} size="small" variant="outlined" label={citation} />)}
+              </Stack>
+            </Box>
+          )}
+
+          {!!synthesis.uncertainties?.length && (
+            <Alert severity="warning" icon={false}>
+              <Typography variant="subtitle2" fontWeight={800}>Uncertainty</Typography>
+              {synthesis.uncertainties.map((item) => <Typography key={item} variant="body2">• {item}</Typography>)}
+            </Alert>
+          )}
+
+          {!!synthesis.whatWouldChangeMyMind?.length && (
+            <Box>
+              <Typography variant="overline" color="text.secondary" fontWeight={800}>What would change this view</Typography>
+              {synthesis.whatWouldChangeMyMind.map((item) => <Typography key={item} variant="body2">• {item}</Typography>)}
+            </Box>
+          )}
         </>
       )}
     </Stack>
