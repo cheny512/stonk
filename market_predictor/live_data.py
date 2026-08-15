@@ -4,7 +4,14 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
-from .config import massive_api_key, thetadata_password, thetadata_username
+from .config import (
+    massive_api_key,
+    options_provider,
+    thetadata_api_key,
+    thetadata_base_url,
+    thetadata_password,
+    thetadata_username,
+)
 from .data import PriceRow, load_price_csv
 from .universe import YEARS_DEFAULT, _write_csv, custom_dir, sp500_dir
 
@@ -27,6 +34,9 @@ def load_ticker_rows(ticker: str) -> list[PriceRow]:
 
 def list_available_providers() -> dict[str, Any]:
     massive = bool(massive_api_key())
+    theta_auth = bool(
+        thetadata_api_key() or (thetadata_username() and thetadata_password())
+    )
     return {
         "massive": {
             "configured": massive,
@@ -36,10 +46,15 @@ def list_available_providers() -> dict[str, Any]:
         "polygon": {"configured": massive, "role": "Alias for Massive (use MASSIVE_API_KEY)"},
         "yfinance": {"configured": True, "role": "Free delayed daily bars for any symbol (no key)"},
         "thetadata": {
-            "configured": bool(thetadata_username() and thetadata_password()),
-            "role": "Deep historical options for training",
+            "configured": True,
+            "authenticationConfigured": theta_auth,
+            "role": "Live and historical options through Theta Terminal v3",
+            "baseUrl": thetadata_base_url(),
+            "requiresLocalTerminal": True,
+            "docs": "https://docs.thetadata.us/Articles/Getting-Started/Getting-Started.html",
         },
         "default_equity": "massive" if massive else "yfinance",
+        "default_options": options_provider(),
     }
 
 

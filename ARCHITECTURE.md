@@ -51,6 +51,7 @@ Long tasks have persisted status and idempotency keys. The included executor is 
 - Current fundamentals are not yet a licensed point-in-time fundamentals archive.
 - S&P 500 constituent files can introduce survivorship bias unless membership is reconstructed historically.
 - Options recommendations are educational filters, not personalized suitability decisions.
+- ThetaData option chains require a separately running Theta Terminal v3 at the configured local URL. Snapshot Greeks depend on the user's ThetaData tier; the adapter falls back to quote/OHLC/open-interest snapshots or the most recent completed EOD chain. Liquidity checks use only fields actually supplied and surface that limitation.
 - The local job runner is single-host and does not resume function execution after process failure.
 - Historical performance is not evidence of future profitability.
 

@@ -84,14 +84,16 @@ def recommend_option_contracts(
         mid = q.mid if q.mid > 0 else (q.bid + q.ask) / 2
         return (q.ask - q.bid) / mid if mid > 0 and q.ask >= q.bid else math.inf
 
+    open_interest_available = any(q.open_interest is not None for q in candidates)
+    volume_available = any(q.volume is not None for q in candidates)
     liquid_candidates = [
         quote
         for quote in candidates
         if quote.bid > 0
         and quote.ask >= quote.bid
         and quote_spread_pct(quote) <= max_spread_pct
-        and (quote.open_interest or 0) >= min_open_interest
-        and (quote.volume or 0) >= min_volume
+        and (not open_interest_available or (quote.open_interest or 0) >= min_open_interest)
+        and (not volume_available or (quote.volume or 0) >= min_volume)
     ]
     rejected_count = len(candidates) - len(liquid_candidates)
     if not liquid_candidates:
@@ -105,6 +107,8 @@ def recommend_option_contracts(
                 "maxSpreadPct": max_spread_pct,
                 "minOpenInterest": min_open_interest,
                 "minVolume": min_volume,
+                "openInterestApplied": open_interest_available,
+                "volumeApplied": volume_available,
             },
             "rejectedCount": rejected_count,
         }
@@ -177,9 +181,14 @@ def recommend_option_contracts(
             "maxSpreadPct": max_spread_pct,
             "minOpenInterest": min_open_interest,
             "minVolume": min_volume,
+            "openInterestApplied": open_interest_available,
+            "volumeApplied": volume_available,
         },
         "rejectedCount": rejected_count,
-        "methodology": "Educational liquidity screen ranked by target-strike distance and observed volume/open interest.",
+        "methodology": (
+            "Educational liquidity screen ranked by target-strike distance, spread, and available liquidity fields. "
+            + ("Open interest was enforced." if open_interest_available else "Open interest was unavailable and was not used.")
+        ),
         "riskDisclosure": "This is not a personalized recommendation. Long options can lose 100% of premium; quotes can change before execution.",
     }
 

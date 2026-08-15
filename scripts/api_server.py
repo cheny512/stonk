@@ -533,11 +533,12 @@ def _execute_stock_autopilot(ticker: str, body: AutopilotBody) -> dict[str, Any]
 
             chain = load_options_chain(symbol, rows[-1].date, mode="live")
             attach_options_to_signal(result, chain, body.horizon, body.confidence)
-        except Exception:
-            logger.warning("autopilot_options_unavailable", ticker=symbol)
+        except Exception as exc:
+            message = sanitize_error_message(exc)
+            logger.warning("autopilot_options_unavailable", ticker=symbol, error=message)
             result["options"] = {
                 "available": False,
-                "message": "Live options data is unavailable. Check the provider subscription and permissions.",
+                "message": message,
                 "contracts": [],
             }
     result["tradePlan"] = build_trade_plan(rows, result, body.horizon)
@@ -810,7 +811,10 @@ def stock_test(body: StockTestBody) -> dict[str, Any]:
                 chain = load_options_chain(body.ticker, as_of, mode="live")
                 attach_options_to_signal(result, chain, body.horizon, body.confidence)
             except Exception as exc:
-                result["options"] = {"available": False, "message": str(exc)}
+                result["options"] = {
+                    "available": False,
+                    "message": sanitize_error_message(exc),
+                }
 
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

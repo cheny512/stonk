@@ -135,7 +135,7 @@ def load_equity_from_provider(
     *,
     mode: Literal["auto", "training", "live"] = "auto",
 ) -> list[PriceRow]:
-    """Fetch OHLCV via Polygon (recent) or ThetaData (historical training)."""
+    """Fetch OHLCV via Massive (recent) or ThetaData (historical training)."""
     bars = _fetch_equity_bars(ticker, start, end, mode=mode)
     rows = equity_bars_to_price_rows(bars)
     if len(rows) < 90:
@@ -150,4 +150,3 @@ def load_options_chain(
     mode: Literal["auto", "training", "live"] = "auto",
 ) -> OptionsChain:
     return _fetch_options_chain(ticker, as_of, mode=mode)
-

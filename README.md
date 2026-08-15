@@ -55,6 +55,19 @@ cd ui && npm ci && npm run dev
 
 Open the UI at [http://127.0.0.1:5173](http://127.0.0.1:5173). The API runs at [http://127.0.0.1:8000](http://127.0.0.1:8000); a 404 at the API root is expected. Health is available at `/api/health`.
 
+### ThetaData v3 options
+
+ThetaData is the default options provider, so Massive options access is not required. The adapter talks to the local [Theta Terminal v3](https://docs.thetadata.us/Articles/Getting-Started/Getting-Started.html) REST server; it never sends ThetaData credentials from the web API.
+
+1. Generate a ThetaData API key and set `THETADATA_API_KEY`, or retain the legacy ThetaData username/password values already supported by the launcher.
+2. Install Java 21+, download `ThetaTerminalv3.jar`, then run `.venv/bin/python scripts/start_thetadata.py` in a separate terminal.
+3. Keep `THETADATA_BASE_URL=http://127.0.0.1:25503/v3` and `STONK_OPTIONS_PROVIDER=thetadata` in this project's `.env`.
+4. Leave Theta Terminal running alongside `npm run dev`.
+
+The launcher passes `THETADATA_API_KEY` through the terminal environment. For the email/password flow, it creates a permission-restricted temporary `creds.txt`, points Theta Terminal at it, and removes it when the terminal exits. Stonk's web API never transmits those credentials.
+
+On ThetaData's free tier, Stonk automatically falls back from paid live snapshots to the most recent completed EOD option chain. The UI reports that chain's actual date. Spread and volume safeguards remain active; open interest is enforced only when the subscribed endpoint supplies it.
+
 Alternatively:
 
 ```bash

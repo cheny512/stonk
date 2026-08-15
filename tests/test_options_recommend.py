@@ -51,3 +51,35 @@ def test_options_screen_surfaces_defined_debit_risk():
     assert result["contracts"][0]["maxLoss"] == 500
     assert result["contracts"][0]["eligible"] is True
     assert "not a personalized recommendation" in result["riskDisclosure"]
+
+
+def test_options_screen_uses_volume_when_open_interest_is_unavailable():
+    quote = _quote("EOD", bid=4.8, ask=5.2, oi=0, volume=100)
+    quote = OptionQuote(
+        symbol=quote.symbol,
+        underlying=quote.underlying,
+        expiration=quote.expiration,
+        strike=quote.strike,
+        right=quote.right,
+        bid=quote.bid,
+        ask=quote.ask,
+        mid=quote.mid,
+        implied_vol=quote.implied_vol,
+        delta=quote.delta,
+        open_interest=None,
+        volume=quote.volume,
+    )
+    chain = OptionsChain(
+        underlying="AAPL",
+        as_of="2026-08-13",
+        spot=200,
+        provider="thetadata",
+        quotes=[quote],
+    )
+
+    result = recommend_option_contracts(chain, 0.65, 0.03, 0.04, 5)
+
+    assert result["available"] is True
+    assert result["filters"]["openInterestApplied"] is False
+    assert result["filters"]["volumeApplied"] is True
+    assert "Open interest was unavailable" in result["methodology"]

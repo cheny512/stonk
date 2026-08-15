@@ -11,8 +11,9 @@ def test_training_mode_always_thetadata():
     assert provider_name_for_as_of(date.today().isoformat(), mode="training") == "thetadata"
 
 
-def test_live_mode_always_massive():
-    assert provider_name_for_as_of(date.today().isoformat(), mode="live") == "massive"
+def test_live_mode_defaults_to_thetadata(monkeypatch):
+    monkeypatch.delenv("STONK_OPTIONS_PROVIDER", raising=False)
+    assert provider_name_for_as_of(date.today().isoformat(), mode="live") == "thetadata"
 
 
 def test_auto_uses_thetadata_for_old_dates():

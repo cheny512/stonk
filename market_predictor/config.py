@@ -51,6 +51,26 @@ def thetadata_password() -> str | None:
     return value or None
 
 
+def thetadata_api_key() -> str | None:
+    """API key consumed by Theta Terminal v3 when the terminal starts."""
+    value = os.getenv("THETADATA_API_KEY", "").strip()
+    return value or None
+
+
+def thetadata_base_url() -> str:
+    """Local REST endpoint exposed by Theta Terminal v3."""
+    value = os.getenv("THETADATA_BASE_URL", "http://127.0.0.1:25503/v3").strip()
+    return (value or "http://127.0.0.1:25503/v3").rstrip("/")
+
+
+def options_provider() -> str:
+    """Provider used for option chains. ThetaData is the local-first default."""
+    value = os.getenv("STONK_OPTIONS_PROVIDER", "thetadata").strip().lower()
+    if value not in {"thetadata", "massive"}:
+        raise ValueError("STONK_OPTIONS_PROVIDER must be 'thetadata' or 'massive'")
+    return value
+
+
 def api_host() -> str:
     return os.getenv("API_HOST", "127.0.0.1")
 

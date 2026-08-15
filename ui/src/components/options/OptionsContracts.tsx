@@ -12,7 +12,7 @@ export function OptionsContracts({ options }: { options?: OptionsChain }) {
     <Stack spacing={2}>
       <Alert severity="success">
         Educational screen · {(options as any).side?.toUpperCase()} scenario · exp {(options as any).targetExpiration} · IV{" "}
-        {pct((options as any).medianIv)}
+        {pct((options as any).medianIv)} · chain as of {(options as any).asOf}
       </Alert>
       <Typography variant="caption" color="text.secondary">
         {(options as any).methodology} {(options as any).riskDisclosure}
