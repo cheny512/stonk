@@ -192,12 +192,16 @@ class ThetaDataProvider(DataProvider):
             "end_date": compact,
         }
         eod = list(_flatten_response(self._get("/option/history/eod", params)))
-        greeks = list(
-            _flatten_response(self._optional_get("/option/history/greeks/eod", params))
-        )
-        open_interest = list(
-            _flatten_response(self._optional_get("/option/history/open_interest", params))
-        )
+        if self.use_snapshots:
+            greeks = list(
+                _flatten_response(self._optional_get("/option/history/greeks/eod", params))
+            )
+            open_interest = list(
+                _flatten_response(self._optional_get("/option/history/open_interest", params))
+            )
+        else:
+            greeks = []
+            open_interest = []
         records = _merge_contract_records(eod, greeks, open_interest)
         spot = _first_number(records, "underlying_price") or self._fetch_spot(symbol, as_of, live=False)
         return records, spot

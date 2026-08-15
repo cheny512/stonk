@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
 import httpx
 import pytest
 import respx
@@ -93,3 +94,47 @@ def test_thetadata_v3_reports_terminal_not_running() -> None:
 
     with pytest.raises(ThetaDataUnavailable, match="Start ThetaTerminalv3.jar"):
         provider.fetch_equity_bars("AAPL", "2024-01-02", "2024-01-02")
+
+
+@respx.mock
+def test_thetadata_free_mode_uses_only_eod_endpoints() -> None:
+    source_date = date.today() - timedelta(days=1)
+    while source_date.weekday() >= 5:
+        source_date -= timedelta(days=1)
+    source_day = source_date.isoformat()
+    contract = {"symbol": "AAPL", "expiration": "2026-09-18", "strike": 220.0, "right": "CALL"}
+    eod_route = respx.get(url__regex=r".*/option/history/eod.*").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "response": [
+                    {
+                        "contract": contract,
+                        "data": [
+                            {
+                                "created": f"{source_day}T17:15:00",
+                                "bid": 4.8,
+                                "ask": 5.2,
+                                "volume": 100,
+                            }
+                        ],
+                    }
+                ]
+            },
+        )
+    )
+    respx.get(url__regex=r".*/stock/history/eod.*").mock(
+        return_value=httpx.Response(
+            200,
+            json={"response": [{"created": f"{source_day}T17:15:00", "close": 215.25}]},
+        )
+    )
+
+    chain = ThetaDataProvider(live=True, use_snapshots=False).fetch_options_chain(
+        "FREEV3", date.today().isoformat()
+    )
+
+    assert eod_route.called
+    assert chain.as_of == source_day
+    assert len(chain.quotes) == 1
+    assert chain.quotes[0].open_interest is None
