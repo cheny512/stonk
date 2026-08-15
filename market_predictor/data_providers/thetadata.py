@@ -6,7 +6,7 @@ from typing import Any, Iterable
 import httpx
 
 from ..cache import cache_path, read_parquet_or_csv, write_parquet_or_csv
-from ..config import thetadata_base_url
+from ..config import thetadata_base_url, thetadata_snapshots_enabled
 from .base import DataProvider
 from .types import EquityBar, OptionQuote, OptionsChain
 
@@ -37,6 +37,7 @@ class ThetaDataProvider(DataProvider):
         *,
         base_url: str | None = None,
         live: bool = False,
+        use_snapshots: bool | None = None,
         timeout: float = 120.0,
         max_dte: int = 180,
         strike_range: int = 40,
@@ -46,6 +47,7 @@ class ThetaDataProvider(DataProvider):
         del username, password
         self.base_url = (base_url or thetadata_base_url()).rstrip("/")
         self.live = live
+        self.use_snapshots = thetadata_snapshots_enabled() if use_snapshots is None else use_snapshots
         self.timeout = timeout
         self.max_dte = max_dte
         self.strike_range = strike_range
@@ -134,7 +136,8 @@ class ThetaDataProvider(DataProvider):
         if cached is not None:
             return _chain_from_cached(symbol, as_of, cached)
 
-        if self.live or _is_recent(as_of):
+        recent = self.live or _is_recent(as_of)
+        if recent and self.use_snapshots:
             try:
                 records, spot = self._fetch_snapshot_records(symbol, as_of)
             except ThetaDataRequestError as exc:
@@ -143,6 +146,8 @@ class ThetaDataProvider(DataProvider):
                 records, spot = [], None
             if not records:
                 records, spot = self._fetch_recent_eod_records(symbol, as_of)
+        elif recent:
+            records, spot = self._fetch_recent_eod_records(symbol, as_of)
         else:
             records, spot = self._fetch_historical_records(symbol, as_of)
 

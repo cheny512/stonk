@@ -10,6 +10,7 @@ from .config import (
     thetadata_api_key,
     thetadata_base_url,
     thetadata_password,
+    thetadata_snapshots_enabled,
     thetadata_username,
 )
 from .data import PriceRow, load_price_csv
@@ -51,6 +52,7 @@ def list_available_providers() -> dict[str, Any]:
             "role": "Live and historical options through Theta Terminal v3",
             "baseUrl": thetadata_base_url(),
             "requiresLocalTerminal": True,
+            "snapshotsEnabled": thetadata_snapshots_enabled(),
             "docs": "https://docs.thetadata.us/Articles/Getting-Started/Getting-Started.html",
         },
         "default_equity": "massive" if massive else "yfinance",

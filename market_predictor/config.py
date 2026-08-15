@@ -63,6 +63,12 @@ def thetadata_base_url() -> str:
     return (value or "http://127.0.0.1:25503/v3").rstrip("/")
 
 
+def thetadata_snapshots_enabled() -> bool:
+    """Paid Theta snapshot endpoints are opt-in; free EOD chains are the default."""
+    value = os.getenv("THETADATA_USE_SNAPSHOTS", "false").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 def options_provider() -> str:
     """Provider used for option chains. ThetaData is the local-first default."""
     value = os.getenv("STONK_OPTIONS_PROVIDER", "thetadata").strip().lower()

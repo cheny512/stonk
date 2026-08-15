@@ -72,7 +72,9 @@ def test_thetadata_v3_builds_live_chain_from_nested_responses() -> None:
         return_value=httpx.Response(200, json={"response": [{"close": 215.25}]})
     )
 
-    chain = ThetaDataProvider(base_url=base, live=True).fetch_options_chain("AAPL", "2026-08-14")
+    chain = ThetaDataProvider(base_url=base, live=True, use_snapshots=True).fetch_options_chain(
+        "AAPL", "2026-08-14"
+    )
 
     assert chain.provider == "thetadata"
     assert chain.spot == 215.25

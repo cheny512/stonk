@@ -68,6 +68,8 @@ The launcher passes `THETADATA_API_KEY` through the terminal environment. For th
 
 On ThetaData's free tier, Stonk automatically falls back from paid live snapshots to the most recent completed EOD option chain. The UI reports that chain's actual date. Spread and volume safeguards remain active; open interest is enforced only when the subscribed endpoint supplies it.
 
+`THETADATA_USE_SNAPSHOTS=false` is the default and avoids probing paid endpoints. Set it to `true` only when the ThetaData account includes snapshot access.
+
 Alternatively:
 
 ```bash
